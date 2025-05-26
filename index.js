@@ -1,15 +1,4 @@
-// package.json
 
-
-// ==============================================
-// .env file
-// ==============================================
-
-
-// ==============================================
-// index.js - Main Bot File
-// ==============================================
-require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const express = require('express');
 const session = require('express-session');
@@ -23,6 +12,9 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerSta
 const ytdl = require('ytdl-core');
 const play = require('play-dl'); // Add this new import
 const ytSearch = require('yt-search');
+
+const sequelize = require('./config/database');
+const ReactionRole = require('./models/ReactionRole');
 
 
 
@@ -755,6 +747,7 @@ const reactionCommands = {
         
         try {
             // Initialize reactionRoles collection if it doesn't exist
+            await message.react(emoji);
             if (!client.reactionRoles) {
                 client.reactionRoles = new Collection();
             }
@@ -821,6 +814,16 @@ const reactionCommands = {
             
             // Save the updated array back to the collection
             client.reactionRoles.set(messageId, messageReactionRoles);
+
+            await ReactionRole.create({
+                messageId: messageId,
+                channelId: channel.id,
+                guildId: interaction.guild.id,
+                emoji: emoji,
+                roleId: role.id
+            });
+
+            console.log(`Added reaction role: ${messageId} -> ${role.id} with emoji ${emoji}`);
             
             // Add the reaction to the message
             await message.react(emoji);
@@ -911,11 +914,20 @@ const reactionCommands = {
             
             // Remove the reaction role from the array
             messageReactionRoles.splice(index, 1);
+
+            //remove from database
+
+            await ReactionRole.destroy({
+                where: {
+                    messageId: messageId,
+                    emoji: emoji
+                }
+            });
             
             // If there are still reaction roles for this message, update the collection
             if (messageReactionRoles.length > 0) {
                 client.reactionRoles.set(messageId, messageReactionRoles);
-                
+
                 // Update the message embed if it's our message
                 if (message.author.id === client.user.id && message.embeds.length > 0) {
                     const embed = EmbedBuilder.from(message.embeds[0]);
@@ -1044,6 +1056,15 @@ const reactionCommands = {
                     channelId: channel.id
                 });
                 
+                // Save to database
+                await ReactionRole.create({
+                    messageId: message.id,
+                    channelId: channel.id,
+                    guildId: interaction.guild.id,
+                    emoji: pair.emoji,
+                    roleId: pair.roleId
+                });
+                
                 console.log(`Added reaction role: ${message.id} -> ${pair.roleId} with emoji ${pair.emoji}`);
             } catch (error) {
                 console.error(`Error adding reaction ${pair.emoji}:`, error);
@@ -1069,6 +1090,7 @@ const reactionCommands = {
 const { SlashCommandBuilder } = require('discord.js');
 
 
+
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
 
@@ -1077,6 +1099,17 @@ client.once('ready', async () => {
     }
     
     try {
+        // Initialize database connection
+        await sequelize.authenticate();
+        console.log('Database connection established successfully.');
+        
+        // Sync models with database
+        await sequelize.sync();
+        console.log('Database models synchronized.');
+        
+        // Load reaction roles from database
+        await loadReactionRolesFromDatabase();
+        
         // Convert SlashCommandBuilder objects to JSON for API compatibility
         const commandsData = commands.map(command => command.toJSON());
         
@@ -1084,9 +1117,38 @@ client.once('ready', async () => {
         await client.application.commands.set(commandsData);
         console.log('Slash commands registered successfully!');
     } catch (error) {
-        console.error('Error registering slash commands:', error);
+        console.error('Error during initialization:', error);
     }
 });
+
+async function loadReactionRolesFromDatabase() {
+    try {
+        const reactionRoles = await ReactionRole.findAll();
+        
+        // Group reaction roles by messageId
+        for (const rr of reactionRoles) {
+            const messageId = rr.messageId;
+            
+            // If this message doesn't exist in the collection yet, create a new array
+            if (!client.reactionRoles.has(messageId)) {
+                client.reactionRoles.set(messageId, []);
+            }
+            
+            // Add this reaction role to the array
+            client.reactionRoles.get(messageId).push({
+                emoji: rr.emoji,
+                roleId: rr.roleId,
+                channelId: rr.channelId
+            });
+            
+            console.log(`Loaded reaction role from database: ${messageId} -> ${rr.roleId} with emoji ${rr.emoji}`);
+        }
+        
+        console.log(`Loaded ${reactionRoles.length} reaction roles from database.`);
+    } catch (error) {
+        console.error('Error loading reaction roles from database:', error);
+    }
+}
 
 
 // ... existing code ...

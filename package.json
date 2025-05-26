@@ -19,9 +19,11 @@
     "express-session": "^1.17.3",
     "ffmpeg-static": "^5.2.0",
     "libsodium-wrappers": "^0.7.15",
+    "mysql2": "^3.14.1",
     "passport": "^0.7.0",
     "passport-discord": "^0.1.4",
     "play-dl": "^1.9.7",
+    "sequelize": "^6.37.7",
     "youtube-search-api": "^1.1.0",
     "yt-search": "^2.13.1",
     "ytdl-core": "^4.11.5"
