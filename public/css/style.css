@@ -1,0 +1,70 @@
+/* Custom styles for DLOR2025 */
+body {
+    background-color: #2c2f33;
+    color: #ffffff;
+}
+
+/* Add a test style to verify CSS loading */
+.test-style {
+    border: 3px solid red;
+}
+
+.sidebar {
+    background-color: #23272a;
+    border-radius: 10px;
+    min-height: 80vh;
+}
+
+.card {
+    background-color: #36393f;
+    border: none;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: #2f3136;
+    border-bottom: none;
+    border-radius: 10px 10px 0 0 !important;
+}
+
+.nav-link {
+    color: #ffffff;
+    border-radius: 5px;
+}
+
+.nav-link:hover, .nav-link.active {
+    background-color: #5865f2;
+}
+
+.btn-primary {
+    background-color: #5865f2;
+    border-color: #5865f2;
+}
+
+.btn-primary:hover {
+    background-color: #4752c4;
+    border-color: #4752c4;
+}
+
+.text-muted {
+    color: #b9bbbe !important;
+}
+
+/* Discord-like scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2f3136;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #202225;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #18191c;
+}

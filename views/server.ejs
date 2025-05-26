@@ -1,0 +1,782 @@
+<%- include('partials/header') %>
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="sidebar p-3 rounded">
+                <div class="d-flex align-items-center mb-4">
+                    <% if (guild.icon) { %>
+                        <img src="<%= guild.iconURL({ dynamic: true }) %>" alt="<%= guild.name %>" class="rounded-circle me-3" width="40" height="40">
+                    <% } else { %>
+                        <div class="bg-secondary rounded-circle me-3 d-flex align-items-center justify-content-center" 
+                             style="width: 40px; height: 40px;">
+                            <i class="fas fa-server text-white"></i>
+                        </div>
+                    <% } %>
+                    <h5 class="text-white mb-0"><%= guild.name %></h5>
+                </div>
+  
+                <ul class="nav nav-pills flex-column">
+                    <li class="nav-item mb-2">
+                        <a class="nav-link text-white active" href="#channels" data-bs-toggle="pill">
+                            <i class="fas fa-hashtag me-2"></i>Channels
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link text-white" href="#music" data-bs-toggle="pill">
+                            <i class="fas fa-music me-2"></i>Music
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link text-white" href="#reactions" data-bs-toggle="pill">
+                            <i class="fas fa-star me-2"></i>Reaction Roles
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link text-white" href="#commands" data-bs-toggle="pill">
+                            <i class="fas fa-terminal me-2"></i>Commands
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link text-white" href="#stats" data-bs-toggle="pill">
+                            <i class="fas fa-chart-bar me-2"></i>Statistics
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+  
+        <div class="col-md-9">
+            <div class="tab-content">
+                <!-- Channels Tab -->
+                <div class="tab-pane fade show active" id="channels">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-hashtag me-2"></i>Channel Management</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <h6>Create New Channel</h6>
+                                    <form id="createChannelForm">
+                                        <div class="mb-3">
+                                            <input type="text" class="form-control" id="channelName" placeholder="Channel Name" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <select class="form-select" id="channelType">
+                                                <option value="text">Text Channel</option>
+                                                <option value="voice">Voice Channel</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-plus me-2"></i>Create Channel
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+  
+                            <h6>Existing Channels</h6>
+                            <div class="row">
+                                <% if (channels && channels.size > 0) { %>
+                                    <% channels.forEach(channel => { %>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card">
+                                                <div class="card-body d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <h6 class="mb-0">
+                                                            <i class="fas fa-<%= channel.type === 2 ? 'volume-up' : 'hashtag' %> me-2"></i>
+                                                            <%= channel.name %>
+                                                        </h6>
+                                                        <small class="text-muted"><%= channel.type === 2 ? 'Voice' : 'Text' %> Channel</small>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-danger" onclick="deleteChannel('<%= channel.id %>')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                <% } else { %>
+                                    <p class="text-muted">No channels found.</p>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+  
+                <!-- Music Tab -->
+                <div class="tab-pane fade" id="music">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-music me-2"></i>Music Control</h5>
+                        </div>
+                        <div class="card-body">
+                            <% if (musicQueue && musicQueue.isPlaying) { %>
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-play me-2"></i>Currently Playing</h6>
+                                    <% if (musicQueue.currentSong) { %>
+                                        <p class="mb-2"><strong><%= musicQueue.currentSong.title %></strong></p>
+                                        <p class="mb-0">Requested by: <%= musicQueue.currentSong.requestedBy.username %></p>
+                                    <% } %>
+                                </div>
+  
+                                <div class="btn-group mb-4">
+                                    <button class="btn btn-warning" onclick="controlMusic('skip')">
+                                        <i class="fas fa-step-forward me-2"></i>Skip
+                                    </button>
+                                    <button class="btn btn-danger" onclick="controlMusic('stop')">
+                                        <i class="fas fa-stop me-2"></i>Stop
+                                    </button>
+                                </div>
+  
+                                <% if (musicQueue.songs && musicQueue.songs.length > 0) { %>
+                                    <h6>Queue (<%= musicQueue.songs.length %> songs)</h6>
+                                    <div class="list-group">
+                                        <% musicQueue.songs.slice(0, 10).forEach((song, index) => { %>
+                                            <div class="list-group-item">
+                                                <div class="d-flex justify-content-between">
+                                                    <div>
+                                                        <h6 class="mb-1"><%= index + 1 %>. <%= song.title %></h6>
+                                                        <small>Requested by: <%= song.requestedBy.username %></small>
+                                                    </div>
+                                                    <small class="text-muted"><%= song.duration %></small>
+                                                </div>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                <% } %>
+                            <% } else { %>
+                                <div class="alert alert-secondary text-center">
+                                    <i class="fas fa-music fa-3x mb-3"></i>
+                                    <h5>No Music Playing</h5>
+                                    <p>Use the <code>/play</code> command in Discord to start playing music!</p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+  
+                <!-- Reaction Roles Tab -->
+                <div class="tab-pane fade" id="reactions">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-star me-2"></i>Reaction Roles</h5>
+                        </div>
+                        <!-- Add this at the top of the card-body in the Reaction Roles tab -->
+                        <div class="card-body">
+                            <!-- Notification area -->
+                            <div id="notificationArea" style="display: none;" class="alert mb-3">
+                                <span id="notificationMessage"></span>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-info-circle me-2"></i>How to Setup Reaction Roles</h6>
+                                <p class="mb-0">Use the form below or the <code>/reactionrole</code> command in Discord to create reaction roles. Users can then react to messages to get roles automatically!</p>
+                            </div>
+                            
+                            <!-- Add Reaction Role Form -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6>Add Reaction Role</h6>
+                                </div>
+                                <div class="card-body">
+                                    <form id="addReactionRoleForm">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="reactionChannel" class="form-label">Channel</label>
+                                                <select class="form-select" id="reactionChannel" required>
+                                                    <option value="">Select Channel</option>
+                                                    <% channels.forEach(channel => { %>
+                                                        <% if (channel.type !== 2) { %> <!-- Only text channels -->
+                                                            <option value="<%= channel.id %>"><%= channel.name %></option>
+                                                        <% } %>
+                                                    <% }) %>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="messageOptions" class="form-label">Message Options</label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="messageOption" id="newMessage" value="new" checked>
+                                                    <label class="form-check-label" for="newMessage">
+                                                        Create new message
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="messageOption" id="existingMessage" value="existing">
+                                                    <label class="form-check-label" for="existingMessage">
+                                                        Use existing message
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="newMessageFields">
+                                            <div class="mb-3">
+                                                <label for="messageContent" class="form-label">Message Content</label>
+                                                <textarea class="form-control" id="messageContent" rows="3" placeholder="React with the emoji to get the role!"></textarea>
+                                            </div>
+                                        </div>
+                                        <div id="existingMessageFields" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="existingMessageId" class="form-label">Message ID</label>
+                                                <input type="text" class="form-control" id="existingMessageId" placeholder="Enter message ID">
+                                                <small class="text-muted">Right-click on a message and select "Copy ID" (Developer Mode must be enabled)</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Multiple Emoji-Role Pairs -->
+                                        <div class="card mb-3">
+                                            <div class="card-header d-flex justify-content-between align-items-center">
+                                                <h6 class="mb-0">Emoji-Role Pairs</h6>
+                                                <button type="button" class="btn btn-sm btn-success" id="addPairBtn">
+                                                    <i class="fas fa-plus"></i> Add Pair
+                                                </button>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="emojiRolePairs">
+                                                    <div class="emoji-role-pair mb-3">
+                                                        <div class="row">
+                                                            <div class="col-md-3 mb-2">
+                                                                <label class="form-label">Emoji</label>
+                                                                <input type="text" class="form-control emoji-input" placeholder="e.g. 👍 or ✅" required>
+                                                            </div>
+                                                            <div class="col-md-7 mb-2">
+                                                                <label class="form-label">Role</label>
+                                                                <select class="form-select role-select" required>
+                                                                    <option value="">Select Role</option>
+                                                                    <% roles.forEach(role => { %>
+                                                                        <% if (!role.managed && role.name !== '@everyone') { %>
+                                                                            <option value="<%= role.id %>"><%= role.name %></option>
+                                                                        <% } %>
+                                                                    <% }) %>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-2 mb-2 d-flex align-items-end">
+                                                                <button type="button" class="btn btn-danger remove-pair" disabled>
+                                                                    <i class="fas fa-trash"></i>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-plus me-2"></i>Add Reaction Roles
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+  
+                            <% if (reactionRoles && reactionRoles.length > 0) { %>
+                                <h6>Active Reaction Roles</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Message ID</th>
+                                                <th>Channel</th>
+                                                <th>Primary Role</th>
+                                                <th>Additional Roles</th>
+                                                <th>Emoji</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <% reactionRoles.forEach(role => { %>
+                                                <tr>
+                                                    <td><code><%= role.messageId %></code></td>
+                                                    <td><span class="badge bg-secondary"><%= role.channelName %></span></td>
+                                                    <td><span class="badge bg-primary"><%= role.roleName %></span></td>
+                                                    <td>
+                                                        <% if (role.additionalRoles && role.additionalRoles.length > 0) { %>
+                                                            <% role.additionalRoles.split(', ').forEach(additionalRole => { %>
+                                                                <span class="badge bg-info"><%= additionalRole %></span>
+                                                            <% }) %>
+                                                        <% } else { %>
+                                                            <span class="text-muted">None</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td><span class="fs-5"><%= role.emoji %></span></td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-danger" onclick="removeReactionRole('<%= role.messageId %>', '<%= role.emoji %>')">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            <% }) %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <% } else { %>
+                                <div class="text-center">
+                                    <i class="fas fa-star fa-3x text-muted mb-3"></i>
+                                    <h5>No Reaction Roles Setup</h5>
+                                    <p class="text-muted">Use the form above to create your first reaction role!</p>
+                                </div>
+                            <% } %>
+                            
+                            <!-- Bot Setup Guide -->
+                            <div class="card mt-4">
+                                <div class="card-header">
+                                    <h6>Bot Setup Guide</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <h5><i class="fas fa-info-circle me-2"></i>Important Setup Information</h5>
+                                        <p>For reaction roles to work properly, please ensure:</p>
+                                        <ol>
+                                            <li>The bot has the <strong>Manage Roles</strong> permission</li>
+                                            <li>The bot's role is positioned <strong>higher</strong> than any roles it needs to assign</li>
+                                            <li>The bot can see and send messages in the channels where reaction roles are set up</li>
+                                        </ol>
+                                        <h6 class="mt-3">Multiple Roles Feature</h6>
+                                        <p>To assign multiple roles with one reaction, select additional roles in the form above.</p>
+                                        <p>Role IDs are automatically handled by the dashboard, so you don't need to copy them manually.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+  
+                <!-- Commands Tab -->
+                <div class="tab-pane fade" id="commands">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-terminal me-2"></i>Command Management</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-info-circle me-2"></i>Available Commands</h6>
+                                <p class="mb-0">Here are all the commands available for your server.</p>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Command</th>
+                                            <th>Description</th>
+                                            <th>Usage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><code>/help</code></td>
+                                            <td>Display all available commands</td>
+                                            <td><code>/help</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/play</code></td>
+                                            <td>Play a song from YouTube</td>
+                                            <td><code>/play [song name or URL]</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/skip</code></td>
+                                            <td>Skip the current song</td>
+                                            <td><code>/skip</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/stop</code></td>
+                                            <td>Stop the music and clear the queue</td>
+                                            <td><code>/stop</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/queue</code></td>
+                                            <td>View the current music queue</td>
+                                            <td><code>/queue</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/createchannel</code></td>
+                                            <td>Create a new channel</td>
+                                            <td><code>/createchannel [name] [type] [category]</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/deletechannel</code></td>
+                                            <td>Delete a channel</td>
+                                            <td><code>/deletechannel [channel]</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/lockdown</code></td>
+                                            <td>Lock the current channel</td>
+                                            <td><code>/lockdown</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/unlock</code></td>
+                                            <td>Unlock the current channel</td>
+                                            <td><code>/unlock</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/reactionrole</code></td>
+                                            <td>Create a reaction role message</td>
+                                            <td><code>/reactionrole [channel] [role] [emoji] [message]</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/ping</code></td>
+                                            <td>Check bot latency</td>
+                                            <td><code>/ping</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/clear</code></td>
+                                            <td>Clear messages in a channel</td>
+                                            <td><code>/clear [amount]</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/serverinfo</code></td>
+                                            <td>Display server information</td>
+                                            <td><code>/serverinfo</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/kick</code></td>
+                                            <td>Kick a user from the server</td>
+                                            <td><code>/kick [user] [reason]</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>/ban</code></td>
+                                            <td>Ban a user from the server</td>
+                                            <td><code>/ban [user] [reason]</code></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+  
+                <!-- Statistics Tab -->
+                <div class="tab-pane fade" id="stats">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-bar me-2"></i>Server Statistics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="card bg-primary text-white">
+                                        <div class="card-body text-center">
+                                            <h1><%= guild.memberCount %></h1>
+                                            <h6>Members</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card bg-success text-white">
+                                        <div class="card-body text-center">
+                                            <h1><%= channels.size %></h1>
+                                            <h6>Channels</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card bg-info text-white">
+                                        <div class="card-body text-center">
+                                            <h1><%= roles.size %></h1>
+                                            <h6>Roles</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <script>
+                            const guildId = '<%= guild.id %>';
+                            
+                            // Channel management functions
+                            document.getElementById('createChannelForm').addEventListener('submit', async (e) => {
+                              e.preventDefault();
+                              const name = document.getElementById('channelName').value;
+                              const type = document.getElementById('channelType').value;
+                            
+                              try {
+                                  const response = await fetch('/api/channel/create', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ guildId, name, type })
+                                  });
+                            
+                                  const result = await response.json();
+                                  if (result.success) {
+                                      location.reload();
+                                  } else {
+                                      alert('Error: ' + result.error);
+                                  }
+                              } catch (error) {
+                                  alert('Error creating channel: ' + error.message);
+                              }
+                            });
+                            
+                            async function deleteChannel(channelId) {
+                              if (!confirm('Are you sure you want to delete this channel?')) return;
+                            
+                              try {
+                                  const response = await fetch('/api/channel/delete', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ guildId, channelId })
+                                  });
+                            
+                                  const result = await response.json();
+                                  if (result.success) {
+                                      location.reload();
+                                  } else {
+                                      alert('Error: ' + result.error);
+                                  }
+                              } catch (error) {
+                                  alert('Error deleting channel: ' + error.message);
+                              }
+                            }
+                            
+                            // Music control functions
+                            async function controlMusic(action) {
+                              try {
+                                  const response = await fetch('/api/music/control', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ guildId, action })
+                                  });
+                            
+                                  const result = await response.json();
+                                  if (result.success) {
+                                      setTimeout(() => location.reload(), 1000);
+                                  } else {
+                                      alert('Error: ' + result.error);
+                                  }
+                              } catch (error) {
+                                  alert('Error controlling music: ' + error.message);
+                              }
+                            }
+                            
+                            // Reaction role functions
+                            async function removeReactionRole(messageId, emoji) {
+                                try {
+                                    const response = await fetch('/api/reaction/remove', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ 
+                                            guildId, 
+                                            messageId, 
+                                            emoji 
+                                        })
+                                    });
+                                    
+                                    const result = await response.json();
+                                    if (result.success) {
+                                        location.reload();
+                                    } else {
+                                        alert('Error: ' + result.error);
+                                    }
+                                } catch (error) {
+                                    alert('Error removing reaction role: ' + error.message);
+                                }
+                            }
+                            </script>
+                            
+                            <div class="card mt-4">
+                                <div class="card-header">
+                                    <h6>Bot Setup Guide</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <h5><i class="fas fa-info-circle me-2"></i>Important Setup Information</h5>
+                                        <p>For reaction roles to work properly, please ensure:</p>
+                                        <ol>
+                                            <li>The bot has the <strong>Manage Roles</strong> permission</li>
+                                            <li>The bot's role is positioned <strong>higher</strong> than any roles it needs to assign</li>
+                                            <li>The bot can see and send messages in the channels where reaction roles are set up</li>
+                                        </ol>
+                                        <h6 class="mt-3">Multiple Roles Feature</h6>
+                                        <p>To assign multiple roles with one reaction:</p>
+                                        <ol>
+                                            <li>Use the <code>/reactionrole</code> command with the primary role</li>
+                                            <li>Add additional role IDs in the <code>additionalroles</code> parameter, separated by commas</li>
+                                            <li>Example: <code>123456789,987654321</code> (no spaces between IDs)</li>
+                                        </ol>
+                                        <p>To get role IDs, right-click a role in your server settings and click "Copy ID" (Developer Mode must be enabled in Discord settings)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Add this section to your server.ejs file -->
+                            <div class="card mt-4">
+                                <div class="card-header">
+                                    <h6>Server Activity</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted text-center">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Server created on <%= new Date(guild.createdTimestamp).toLocaleDateString() %>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <%- include('partials/footer') %>
+  <script>
+
+document.querySelectorAll('input[name="messageOption"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    if (this.value === 'new') {
+      document.getElementById('newMessageFields').style.display = 'block';
+      document.getElementById('existingMessageFields').style.display = 'none';
+    } else {
+      document.getElementById('newMessageFields').style.display = 'none';
+      document.getElementById('existingMessageFields').style.display = 'block';
+    }
+  });
+});
+
+// Add and remove emoji-role pairs
+document.getElementById('addPairBtn').addEventListener('click', function() {
+  const pairsContainer = document.getElementById('emojiRolePairs');
+  const newPair = pairsContainer.querySelector('.emoji-role-pair').cloneNode(true);
+  
+  // Clear values
+  newPair.querySelector('.emoji-input').value = '';
+  newPair.querySelector('.role-select').value = '';
+  
+  // Enable remove button for all pairs
+  const removeButtons = document.querySelectorAll('.remove-pair');
+  removeButtons.forEach(btn => btn.disabled = false);
+  
+  // Add event listener to the new remove button
+  newPair.querySelector('.remove-pair').addEventListener('click', function() {
+    newPair.remove();
+    
+    // If only one pair left, disable its remove button
+    const remainingPairs = document.querySelectorAll('.emoji-role-pair');
+    if (remainingPairs.length === 1) {
+      remainingPairs[0].querySelector('.remove-pair').disabled = true;
+    }
+  });
+  
+  // Add the new pair to the container
+  pairsContainer.appendChild(newPair);
+});
+
+// Add reaction role form submission
+document.getElementById('addReactionRoleForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const channelId = document.getElementById('reactionChannel').value;
+  const messageOption = document.querySelector('input[name="messageOption"]:checked').value;
+  
+  let messageId = null;
+  let messageContent = null;
+  
+  if (messageOption === 'new') {
+    messageContent = document.getElementById('messageContent').value;
+  } else {
+    messageId = document.getElementById('existingMessageId').value;
+    if (!messageId) {
+      alert('Please enter a message ID');
+      return;
+    }
+  }
+  
+  // Collect all emoji-role pairs
+  const pairs = [];
+  const pairElements = document.querySelectorAll('.emoji-role-pair');
+  
+  for (const pairElement of pairElements) {
+    const emoji = pairElement.querySelector('.emoji-input').value;
+    const roleId = pairElement.querySelector('.role-select').value;
+    
+    if (!emoji || !roleId) {
+      alert('Please fill in all emoji and role fields');
+      return;
+    }
+    
+    pairs.push({ emoji, roleId });
+  }
+  
+  if (pairs.length === 0) {
+    alert('Please add at least one emoji-role pair');
+    return;
+  }
+  
+  // Show loading state
+  const submitButton = e.target.querySelector('button[type="submit"]');
+  const originalButtonText = submitButton.innerHTML;
+  submitButton.disabled = true;
+  submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+  
+  try {
+    const response = await fetch('/api/reaction/create-multiple', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        guildId, 
+        channelId, 
+        messageId, 
+        messageContent,
+        pairs
+      })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      alert('Reaction roles created successfully!');
+      location.reload();
+    } else {
+      alert('Error: ' + result.error);
+      submitButton.disabled = false;
+      submitButton.innerHTML = originalButtonText;
+    }
+  } catch (error) {
+    alert('Error creating reaction roles: ' + error.message);
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalButtonText;
+  }
+});
+
+// Helper function to show notifications
+function showNotification(message, type = 'success') {
+    const notificationArea = document.getElementById('notificationArea');
+    const notificationMessage = document.getElementById('notificationMessage');
+    
+    notificationArea.className = type === 'success' 
+        ? 'alert alert-success' 
+        : 'alert alert-danger';
+    
+    notificationMessage.textContent = message;
+    notificationArea.style.display = 'block';
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        notificationArea.style.display = 'none';
+    }, 5000);
+}
+
+// Update the removeReactionRole function
+async function removeReactionRole(messageId, emoji) {
+    if (!confirm('Are you sure you want to delete this reaction role?')) return;
+    
+    try {
+        const response = await fetch('/api/reaction/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                guildId, 
+                messageId, 
+                emoji 
+            })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showNotification('Reaction role removed successfully!');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showNotification('Error: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Error removing reaction role: ' + error.message, 'error');
+    }
+}

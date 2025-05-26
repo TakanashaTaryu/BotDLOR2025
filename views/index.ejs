@@ -1,0 +1,57 @@
+<%- include('partials/header') %>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    <i class="fab fa-discord fa-5x text-primary mb-4"></i>
+                    <h1 class="display-4 mb-4">Discord Bot Manager</h1>
+                    <p class="lead mb-4">Manage your Discord server with our powerful bot featuring music, channel management, and reaction roles!</p>
+
+                    <div class="row text-start mt-5">
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-0 bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-music fa-3x text-success mb-3"></i>
+                                    <h5>Music Bot</h5>
+                                    <p class="small">Play music from YouTube with queue management and voice controls.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-0 bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-cogs fa-3x text-warning mb-3"></i>
+                                    <h5>Channel Management</h5>
+                                    <p class="small">Create, delete, lock, and manage channels with ease.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-0 bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-star fa-3x text-info mb-3"></i>
+                                    <h5>Reaction Roles</h5>
+                                    <p class="small">Assign roles automatically when users react to messages.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <% if (!user) { %>
+                        <a href="/auth/discord" class="btn btn-discord btn-lg mt-4">
+                            <i class="fab fa-discord me-2"></i>Login with Discord
+                        </a>
+                    <% } else { %>
+                        <a href="/dashboard" class="btn btn-primary btn-lg mt-4">
+                            <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                        </a>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/footer') %>
