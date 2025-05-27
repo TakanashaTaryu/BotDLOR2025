@@ -635,7 +635,6 @@ const channelCommands = {
 // ==============================================
 
 // Add this event handler for reaction roles
-// Add the missing closing parenthesis and semicolon to the messageReactionAdd event handler
 client.on('messageReactionAdd', async (reaction, user) => {
     // Don't respond to bot reactions
     if (user.bot) return;
@@ -658,24 +657,45 @@ client.on('messageReactionAdd', async (reaction, user) => {
     }
     
     console.log(`Found reaction roles for message ID: ${reaction.message.id}`);
-    console.log(`User reacted with: ${reaction.emoji.name} (ID: ${reaction.emoji.id || 'standard emoji'})`);
+    
+    // Get emoji details for better debugging
+    const emojiName = reaction.emoji.name;
+    const emojiId = reaction.emoji.id;
+    const emojiIdentifier = emojiId ? `${emojiName}:${emojiId}` : emojiName;
+    
+    console.log(`User ${user.tag} reacted with: ${emojiName} (ID: ${emojiId || 'standard emoji'})`);
+    console.log(`Emoji identifier: ${emojiIdentifier}`);
+    
+    // Normalize the emoji for comparison
+    let normalizedEmoji;
+    if (emojiId) {
+        // For custom emoji, try multiple formats
+        normalizedEmoji = [
+            `<:${emojiName}:${emojiId}>`,  // Full format
+            `${emojiName}:${emojiId}`,     // Without brackets
+            emojiId,                       // Just the ID
+            emojiName                      // Just the name
+        ];
+    } else {
+        // For standard emoji
+        normalizedEmoji = [emojiName];
+    }
+    
+    console.log(`Normalized emoji formats: ${JSON.stringify(normalizedEmoji)}`);
     
     // Find the matching reaction role with improved emoji matching
-    const matchingRole = messageReactionRoles.find(rr => {
-        // Log the comparison for debugging
-        console.log(`Comparing reaction: ${reaction.emoji.name} (${reaction.emoji.id || 'standard'}) with stored emoji: ${rr.emoji}`);
+    let matchingRole = null;
+    
+    for (const rr of messageReactionRoles) {
+        console.log(`Checking against stored emoji: ${rr.emoji}`);
         
-        // Handle different emoji formats
-        if (reaction.emoji.id) {
-            // Custom emoji - try different formats
-            return rr.emoji === `<:${reaction.emoji.name}:${reaction.emoji.id}>` || 
-                   rr.emoji === reaction.emoji.id ||
-                   rr.emoji === `${reaction.emoji.name}:${reaction.emoji.id}`;
-        } else {
-            // Standard emoji
-            return rr.emoji === reaction.emoji.name;
+        // Check if any of our normalized formats match
+        if (normalizedEmoji.some(format => format === rr.emoji)) {
+            console.log(`✅ Match found! Role ID: ${rr.roleId}`);
+            matchingRole = rr;
+            break;
         }
-    });
+    }
     
     if (matchingRole) {
         console.log(`Found matching role: ${matchingRole.roleId} for emoji: ${matchingRole.emoji}`);
@@ -691,10 +711,10 @@ client.on('messageReactionAdd', async (reaction, user) => {
             console.error('Error adding role:', error);
         }
     } else {
-        console.log(`No matching role found for emoji: ${reaction.emoji.name}`);
+        console.log(`No matching role found for emoji: ${emojiIdentifier}`);
+        console.log(`Available roles for this message: ${JSON.stringify(messageReactionRoles)}`);
     }
 });
-
 
 
 const reactionRoleMultiCommand = {
@@ -763,10 +783,13 @@ const reactionCommands = {
             if (!client.reactionRoles) {
                 client.reactionRoles = new Collection();
             }
+
             
             // Create a new message if messageContent is provided, otherwise use existing message
             let message;
             let messageId;
+
+            
             
             // First, acknowledge the interaction to prevent timeout
             await interaction.deferReply({ ephemeral: true });
@@ -817,28 +840,31 @@ const reactionCommands = {
                 });
             }
             
+            let normalizedEmoji = emoji;
+        
             // Add the reaction to the message
             await message.react(emoji);
             
             // Add the new reaction role to the array
             messageReactionRoles.push({
-                emoji: emoji,
+                emoji: normalizedEmoji,
                 roleId: role.id,
                 channelId: channel.id
             });
             
+            
             // Save the updated array back to the collection
             client.reactionRoles.set(messageId, messageReactionRoles);
-    
+
             await ReactionRole.create({
                 messageId: messageId,
                 channelId: channel.id,
                 guildId: interaction.guild.id,
-                emoji: emoji,
+                emoji: normalizedEmoji,
                 roleId: role.id
             });
     
-            console.log(`Added reaction role: ${messageId} -> ${role.id} with emoji ${emoji}`);
+            console.log(`Added reaction role: ${messageId} -> ${role.id} with emoji ${normalizedEmoji}`);
             
             // Update the message embed to show all roles if it's our message
             if (message.author.id === client.user.id && message.embeds.length > 0) {
@@ -1059,11 +1085,14 @@ const reactionCommands = {
         // Add reactions and store in the client.reactionRoles collection
         for (const pair of pairs) {
             try {
+                // Normalize emoji before storing
+                let normalizedEmoji = pair.emoji;
+                
                 await message.react(pair.emoji);
                 
                 // Add to the messageReactionRoles array
                 messageReactionRoles.push({
-                    emoji: pair.emoji,
+                    emoji: normalizedEmoji,
                     roleId: pair.roleId,
                     channelId: channel.id
                 });
@@ -1073,11 +1102,11 @@ const reactionCommands = {
                     messageId: message.id,
                     channelId: channel.id,
                     guildId: interaction.guild.id,
-                    emoji: pair.emoji,
+                    emoji: normalizedEmoji,
                     roleId: pair.roleId
                 });
                 
-                console.log(`Added reaction role: ${message.id} -> ${pair.roleId} with emoji ${pair.emoji}`);
+                console.log(`Added reaction role: ${message.id} -> ${pair.roleId} with emoji ${normalizedEmoji}`);
             } catch (error) {
                 console.error(`Error adding reaction ${pair.emoji}:`, error);
             }
@@ -1151,14 +1180,17 @@ async function loadReactionRolesFromDatabase() {
                 console.log(`Created new entry for message ID: ${messageId}`);
             }
             
+            // Normalize emoji format if needed
+            let emoji = rr.emoji;
+            
             // Add this reaction role to the array
             client.reactionRoles.get(messageId).push({
-                emoji: rr.emoji,
+                emoji: emoji,
                 roleId: rr.roleId,
                 channelId: rr.channelId
             });
             
-            console.log(`Loaded reaction role from database: Message ID: ${messageId}, Role ID: ${rr.roleId}, Emoji: ${rr.emoji}, Channel ID: ${rr.channelId}`);
+            console.log(`Loaded reaction role from database: Message ID: ${messageId}, Role ID: ${rr.roleId}, Emoji: ${emoji}, Channel ID: ${rr.channelId}`);
         }
         
         console.log(`Loaded ${reactionRoles.length} reaction roles from database.`);
@@ -1517,19 +1549,38 @@ client.on('messageReactionRemove', async (reaction, user) => {
     const messageReactionRoles = client.reactionRoles?.get(reaction.message.id);
     if (!messageReactionRoles) return;
     
+    // Get emoji details for better debugging
+    const emojiName = reaction.emoji.name;
+    const emojiId = reaction.emoji.id;
+    const emojiIdentifier = emojiId ? `${emojiName}:${emojiId}` : emojiName;
+    
+    console.log(`User ${user.tag} removed reaction: ${emojiName} (ID: ${emojiId || 'standard emoji'})`);
+    
+    // Normalize the emoji for comparison
+    let normalizedEmoji;
+    if (emojiId) {
+        // For custom emoji, try multiple formats
+        normalizedEmoji = [
+            `<:${emojiName}:${emojiId}>`,  // Full format
+            `${emojiName}:${emojiId}`,     // Without brackets
+            emojiId,                       // Just the ID
+            emojiName                      // Just the name
+        ];
+    } else {
+        // For standard emoji
+        normalizedEmoji = [emojiName];
+    }
+    
     // Find the matching reaction role with improved emoji matching
-    const matchingRole = messageReactionRoles.find(rr => {
-        // Handle different emoji formats
-        if (reaction.emoji.id) {
-            // Custom emoji - try different formats
-            return rr.emoji === `<:${reaction.emoji.name}:${reaction.emoji.id}>` || 
-                   rr.emoji === reaction.emoji.id ||
-                   rr.emoji === `${reaction.emoji.name}:${reaction.emoji.id}`;
-        } else {
-            // Standard emoji
-            return rr.emoji === reaction.emoji.name;
+    let matchingRole = null;
+    
+    for (const rr of messageReactionRoles) {
+        // Check if any of our normalized formats match
+        if (normalizedEmoji.some(format => format === rr.emoji)) {
+            matchingRole = rr;
+            break;
         }
-    });
+    }
     
     if (matchingRole) {
         try {
