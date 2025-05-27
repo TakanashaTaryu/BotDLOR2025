@@ -1110,7 +1110,7 @@ const reactionCommands = {
             } catch (error) {
                 console.error(`Error adding reaction ${pair.emoji}:`, error);
             }
-        }
+        }   
         
         // Store all reaction roles for this message
         client.reactionRoles.set(message.id, messageReactionRoles);
@@ -1209,6 +1209,32 @@ async function loadReactionRolesFromDatabase() {
 
 // Update your commands array
 const commands = [
+
+    new SlashCommandBuilder()
+    .setName('announcement')
+    .setDescription('Send an announcement to the channel')
+    .addStringOption(option =>
+        option.setName('title')
+            .setDescription('Title of the announcement')
+            .setRequired(true))
+    .addStringOption(option =>
+        option.setName('description')
+            .setDescription('Content of the announcement')
+            .setRequired(true))
+    .addStringOption(option =>
+        option.setName('tags')
+            .setDescription('Tags to mention (format: @role1, @role2, @role3)')
+            .setRequired(false))
+    .addStringOption(option =>
+        option.setName('author')
+            .setDescription('Who is making this announcement')
+            .setRequired(false))
+    .addChannelOption(option =>
+        option.setName('channel')
+            .setDescription('Channel to send the announcement (defaults to current channel)')
+            .setRequired(false)),
+
+
     // Music commands
     new SlashCommandBuilder()
         .setName('play')
@@ -1406,6 +1432,9 @@ client.on('interactionCreate', async (interaction) => {
                         '`/reactionrole` - Create a reaction role message\n' +
                         '`/removereactionrole` - Remove a reaction role'
                     },
+                    { name: '📢 Announcements', value:
+                        '`/announcement` - Send a formatted announcement with optional role mentions'
+                    },
                     { name: '🛠️ Moderation', value: 
                         '`/kick` - Kick a user from the server\n' +
                         '`/ban` - Ban a user from the server\n' +
@@ -1520,6 +1549,76 @@ client.on('interactionCreate', async (interaction) => {
                 .setTimestamp();
             
             await interaction.reply({ embeds: [banEmbed] });
+        }
+
+        else if (commandName === 'announcement') {
+            // Check if user has permission to manage messages
+            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                return interaction.reply({ 
+                    content: 'You need Manage Messages permission to use this command!', 
+                    ephemeral: true 
+                });
+            }
+            
+            // Get command options
+            const title = interaction.options.getString('title');
+            const description = interaction.options.getString('description');
+            const tagsInput = interaction.options.getString('tags') || '';
+            const author = interaction.options.getString('author') || interaction.user.tag;
+            const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+            
+            // Process tags
+            let mentionString = '';
+            if (tagsInput.trim()) {
+                const tagsList = tagsInput.split(',').map(tag => tag.trim());
+                
+                for (const tag of tagsList) {
+                    // Handle role mentions
+                    if (tag.startsWith('@')) {
+                        const roleName = tag.substring(1);
+                        const role = interaction.guild.roles.cache.find(r => 
+                            r.name.toLowerCase() === roleName.toLowerCase() || 
+                            r.id === roleName
+                        );
+                        
+                        if (role) {
+                            mentionString += `${role} `;
+                        }
+                    } else {
+                        // Just add the tag as is
+                        mentionString += `${tag} `;
+                    }
+                }
+            }
+            
+            // Create the announcement embed
+            const announcementEmbed = new EmbedBuilder()
+                .setColor('#FF9900')
+                .setTitle(`📢 ${title}`)
+                .setDescription(description)
+                .setFooter({ text: `Announcement by: ${author}` })
+                .setTimestamp();
+            
+            // Send the announcement
+            await interaction.deferReply({ ephemeral: true });
+            
+            try {
+                await targetChannel.send({ 
+                    content: mentionString.trim() ? mentionString : null,
+                    embeds: [announcementEmbed] 
+                });
+                
+                await interaction.editReply({ 
+                    content: `Announcement successfully sent to ${targetChannel}!`,
+                    ephemeral: true
+                });
+            } catch (error) {
+                console.error('Error sending announcement:', error);
+                await interaction.editReply({ 
+                    content: `Error sending announcement: ${error.message}`,
+                    ephemeral: true
+                });
+            }
         }
     } catch (error) {
         console.error(error);
