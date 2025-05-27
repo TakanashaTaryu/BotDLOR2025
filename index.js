@@ -1529,632 +1529,655 @@ client.quizSessions = new Collection();
 client.quizResults = new Collection();
 
 
-client.on('interactionCreate', async (interaction) => {
-    console.log(`Received interaction: ${interaction.type} from ${interaction.user.tag}`);
 
-    
+
+
+
+// Place this at the top of your file, before the event
+async function safeReply(interaction, options) {
     try {
-    if (interaction.isButton()) {
-        const customId = interaction.customId;
-
-    if (customId.startsWith('quiz_')) {
-        const [prefix, answer, questionId] = customId.split('_');
-        const userId = interaction.user.id;
-        
-        // Get the user's quiz session
-        const session = client.quizSessions.get(userId);
-        if (!session) {
-            return interaction.reply({
-                content: 'This quiz session is no longer active.',
-                ephemeral: true
-            });
+        if (interaction.replied) {
+            await interaction.followUp(options);
+        } else if (interaction.deferred) {
+            await interaction.editReply(options);
+        } else {
+            await interaction.reply(options);
         }
-        
-        // Check if the quiz has expired
-        if (Date.now() > session.endTime) {
-            client.quizSessions.delete(userId);
-            return interaction.reply({
-                content: 'This quiz has expired.',
-                ephemeral: true
-            });
-        }
-        
-        // Mark as answered
-        session.answered = true;
-        
-        // Check if the answer is correct
-        const isCorrect = answer === session.correctAnswer;
-        
-        // Update quiz results
-        if (!client.quizResults.has(userId)) {
-            client.quizResults.set(userId, { correct: 0, total: 0 });
-        }
-        
-        const userResults = client.quizResults.get(userId);
-        userResults.total++;
-        
-        if (isCorrect) {
-            userResults.correct++;
-        }
-        
-        // Create result embed
-        const resultEmbed = new EmbedBuilder()
-            .setColor(isCorrect ? '#4CAF50' : '#F44336')
-            .setTitle(isCorrect ? '✅ Correct Answer!' : '❌ Wrong Answer!')
-            .setDescription(`The correct answer was: ${session.correctAnswer}`)
-            .addFields(
-                { name: 'Your Score', value: `${userResults.correct}/${userResults.total} (${Math.round(userResults.correct / userResults.total * 100)}%)`, inline: false }
-            )
-            .setTimestamp();
-        
-        // Disable all buttons
-        const disabledRow = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`quiz_A_disabled`)
-                    .setLabel('A')
-                    .setStyle(session.correctAnswer === 'A' ? ButtonStyle.Success : (answer === 'A' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
-                    .setDisabled(true),
-                new ButtonBuilder()
-                    .setCustomId(`quiz_B_disabled`)
-                    .setLabel('B')
-                    .setStyle(session.correctAnswer === 'B' ? ButtonStyle.Success : (answer === 'B' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
-                    .setDisabled(true),
-                new ButtonBuilder()
-                    .setCustomId(`quiz_C_disabled`)
-                    .setLabel('C')
-                    .setStyle(session.correctAnswer === 'C' ? ButtonStyle.Success : (answer === 'C' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
-                    .setDisabled(true),
-                new ButtonBuilder()
-                    .setCustomId(`quiz_D_disabled`)
-                    .setLabel('D')
-                    .setStyle(session.correctAnswer === 'D' ? ButtonStyle.Success : (answer === 'D' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
-                    .setDisabled(true)
-            );
-        
-        // Add a button to start a new quiz
-        const newQuizRow = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`new_quiz`)
-                    .setLabel('Start New Quiz')
-                    .setStyle(ButtonStyle.Primary)
-            );
-        
-        // Update the message
-        await interaction.update({
-            content: isCorrect ? 'Congratulations! You got it right!' : 'Sorry, that\'s not correct.',
-            embeds: [resultEmbed],
-            components: [disabledRow, newQuizRow]
-        });
-        
-        // Clean up the session
-        client.quizSessions.delete(userId);
-    }
-    
-    // Handle "Start New Quiz" button
-    if (interaction.customId === 'new_quiz') {
-        // Create a new interaction to trigger the startquiz command
-        const command = client.application.commands.cache.find(cmd => cmd.name === 'startquiz');
-        
-        if (!command) {
-            return interaction.reply({
-                content: 'Unable to start a new quiz. Please use the /startquiz command.',
-                ephemeral: true
-            });
-        }
-        
-        // Acknowledge the button click
-        await interaction.deferUpdate();
-        
-        // Create a new slash command
-        const { commandName } = interaction;
-        try {
-            // Manually trigger the startquiz command
-            const startQuizCommand = 'startquiz';
-            const interactionCreate = client._events.interactionCreate;
-            
-            // Create a mock interaction
-            const mockInteraction = {
-                ...interaction,
-                commandName: startQuizCommand,
-                options: {
-                    getString: () => null,
-                    getInteger: () => null
-                },
-                isChatInputCommand: () => true,
-                reply: interaction.followUp.bind(interaction),
-                deferReply: interaction.deferReply.bind(interaction)
-            };
-            
-            // Call the handler
-            await interactionCreate[0](mockInteraction);
-        } catch (error) {
-            console.error('Error starting new quiz:', error);
-            await interaction.followUp({
-                content: 'There was an error starting a new quiz. Please use the /startquiz command.',
-                ephemeral: true
-            });
-        }
-        return;
+    } catch (err) {
+        try { await interaction.followUp(options); } catch {}
     }
 }
 
+client.on('interactionCreate', async (interaction) => {
+    console.log(`Received interaction: ${interaction.type} from ${interaction.user?.tag}`);
 
-    if (interaction.isChatInputCommand()) {
-        const { commandName } = interaction;
-    
     try {
-        // Handle existing command categories
-        if (musicCommands[commandName]) {
-            await musicCommands[commandName](interaction);
-        } else if (channelCommands[commandName]) {
-            await channelCommands[commandName](interaction);
-        } else if (reactionCommands[commandName]) {
-            await reactionCommands[commandName](interaction);
-        } 
-        // Handle new commands
-        else if (commandName === 'help') {
-            const helpEmbed = new EmbedBuilder()
-                .setColor('#5865F2')
-                .setTitle('Bot Commands')
-                .setDescription('Here are all the available commands:')
-                .addFields(
-                    { name: '🎵 Music Commands', value: 
-                        '`/play [song]` - Play a song from YouTube\n' +
-                        '`/skip` - Skip the current song\n' +
-                        '`/stop` - Stop the music and clear the queue\n' +
-                        '`/queue` - View the current music queue'
-                    },
-                    { name: '⚙️ Channel Commands', value: 
-                        '`/createchannel` - Create a new channel\n' +
-                        '`/deletechannel` - Delete a channel\n' +
-                        '`/lockdown` - Lock the current channel\n' +
-                        '`/unlock` - Unlock the current channel'
-                    },
-                    { name: '🔄 Reaction Roles', value: 
-                        '`/reactionrole` - Create a reaction role message\n' +
-                        '`/removereactionrole` - Remove a reaction role'
-                    },
-                    { name: '📢 Announcements', value:
-                        '`/announcement` - Send a formatted announcement with optional role mentions'
-                    },
-                    { name: '🛠️ Moderation', value: 
-                        '`/kick` - Kick a user from the server\n' +
-                        '`/ban` - Ban a user from the server\n' +
-                        '`/clear` - Clear messages in a channel'
-                    },
-                    { name: '📊 Utility', value: 
-                        '`/help` - Display this help message\n' +
-                        '`/ping` - Check bot latency\n' +
-                        '`/serverinfo` - Display server information'
-                    },
-                    { name: '❓ Quiz System', value: 
-                        '`/makequiz` - Create a new quiz question (Admin only)\n' +
-                        '`/quiztimer` - Set the timer for quizzes (Admin only)\n' +
-                        '`/startquiz` - Start a quiz session'
-                    }
-                );
-            
-            await interaction.reply({ embeds: [helpEmbed] });
-        }
-        
-        else if (commandName === 'ping') {
-            const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
-            const pingTime = sent.createdTimestamp - interaction.createdTimestamp;
-            await interaction.editReply(`Pong! Latency is ${pingTime}ms. API Latency is ${Math.round(client.ws.ping)}ms`);
-        }
+        // ===== BUTTON INTERACTIONS =====
+        if (interaction.isButton()) {
+            const customId = interaction.customId;
 
-        else if (commandName === 'makequiz') {
-            // Check permissions
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
-                return interaction.reply({ 
-                    content: 'You need Manage Messages permission to create quizzes!', 
-                    ephemeral: true 
-                });
-            }
-            
-            const question = interaction.options.getString('question');
-            const optionA = interaction.options.getString('optiona');
-            const optionB = interaction.options.getString('optionb');
-            const optionC = interaction.options.getString('optionc');
-            const optionD = interaction.options.getString('optiond');
-            const correctAnswer = interaction.options.getString('correct');
-            
-            try {
-                // Create quiz in database
-                await Quiz.create({
-                    question,
-                    optionA,
-                    optionB,
-                    optionC,
-                    optionD,
-                    correctAnswer,
-                    createdBy: interaction.user.id,
-                    guildId: interaction.guild.id
-                });
-                
-                const quizEmbed = new EmbedBuilder()
-                    .setColor('#4CAF50')
-                    .setTitle('Quiz Question Created')
-                    .setDescription(question)
-                    .addFields(
-                        { name: 'A', value: optionA, inline: true },
-                        { name: 'B', value: optionB, inline: true },
-                        { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
-                        { name: 'C', value: optionC, inline: true },
-                        { name: 'D', value: optionD, inline: true }
-                    )
-                    .setFooter({ text: `Created by ${interaction.user.tag}` })
+            // Quiz Answer Button
+            if (customId.startsWith('quiz_')) {
+                const [prefix, answer, questionId] = customId.split('_');
+                const userId = interaction.user.id;
+                const session = client.quizSessions.get(userId);
+
+                if (!session) {
+                    return safeReply(interaction, {
+                        content: 'This quiz session is no longer active.',
+                        ephemeral: true
+                    });
+                }
+
+                if (Date.now() > session.endTime) {
+                    client.quizSessions.delete(userId);
+                    return safeReply(interaction, {
+                        content: 'This quiz has expired.',
+                        ephemeral: true
+                    });
+                }
+
+                if (session.answered) {
+                    return safeReply(interaction, {
+                        content: 'You have already answered this quiz.',
+                        ephemeral: true
+                    });
+                }
+
+                session.answered = true;
+                const isCorrect = answer === session.correctAnswer;
+
+                if (!client.quizResults.has(userId)) {
+                    client.quizResults.set(userId, { correct: 0, total: 0 });
+                }
+                const userResults = client.quizResults.get(userId);
+                userResults.total++;
+                if (isCorrect) userResults.correct++;
+
+                const resultEmbed = new EmbedBuilder()
+                    .setColor(isCorrect ? '#4CAF50' : '#F44336')
+                    .setTitle(isCorrect ? '✅ Correct Answer!' : '❌ Wrong Answer!')
+                    .setDescription(`The correct answer was: ${session.correctAnswer}`)
+                    .addFields({
+                        name: 'Your Score',
+                        value: `${userResults.correct}/${userResults.total} (${Math.round(userResults.correct / userResults.total * 100)}%)`,
+                        inline: false
+                    })
                     .setTimestamp();
-                
-                await interaction.reply({ 
-                    content: 'Quiz question created successfully!', 
-                    embeds: [quizEmbed],
-                    ephemeral: true 
-                });
-            } catch (error) {
-                console.error('Error creating quiz:', error);
-                await interaction.reply({ 
-                    content: 'There was an error creating the quiz question!', 
-                    ephemeral: true 
-                });
-            }
-        }
 
+                const disabledRow = new ActionRowBuilder()
+                    .addComponents(
+                        ...['A', 'B', 'C', 'D'].map(option =>
+                            new ButtonBuilder()
+                                .setCustomId(`quiz_${option}_disabled`)
+                                .setLabel(option)
+                                .setStyle(
+                                    session.correctAnswer === option
+                                        ? ButtonStyle.Success
+                                        : (answer === option && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary)
+                                )
+                                .setDisabled(true)
+                        )
+                    );
 
-        else if (commandName === 'quiztimer') {
-            // Check permissions
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
-                return interaction.reply({ 
-                    content: 'You need Manage Messages permission to set quiz timers!', 
-                    ephemeral: true 
-                });
-            }
-            
-            const minutes = interaction.options.getInteger('minutes');
-            const guildId = interaction.guild.id;
-            
-            try {
-                // Update or create quiz timer
-                const [timer, created] = await QuizTimer.findOrCreate({
-                    where: { guildId },
-                    defaults: {
-                        durationMinutes: minutes,
-                        isActive: false
-                    }
-                });
-                
-                if (!created) {
-                    timer.durationMinutes = minutes;
-                    await timer.save();
-                }
-                
-                await interaction.reply({ 
-                    content: `Quiz timer set to ${minutes} minutes!`, 
-                    ephemeral: true 
-                });
-            } catch (error) {
-                console.error('Error setting quiz timer:', error);
-                await interaction.reply({ 
-                    content: 'There was an error setting the quiz timer!', 
-                    ephemeral: true 
-                });
-            }
-        }
-
-
-        else if (commandName === 'startquiz') {
-            const guildId = interaction.guild.id;
-            const userId = interaction.user.id;
-            
-            try {
-                // Check if there's an active quiz session
-                const timer = await QuizTimer.findOne({ where: { guildId } });
-                
-                if (!timer) {
-                    return interaction.reply({ 
-                        content: 'No quiz timer has been set up for this server. Ask an admin to use /quiztimer first!', 
-                        ephemeral: true 
-                    });
-                }
-                
-                // Get all quiz questions for this guild
-                const quizQuestions = await Quiz.findAll({ where: { guildId } });
-                
-                if (quizQuestions.length === 0) {
-                    return interaction.reply({ 
-                        content: 'No quiz questions available. Ask an admin to add some with /makequiz!', 
-                        ephemeral: true 
-                    });
-                }
-                
-                // Select a random question
-                const randomQuestion = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
-                
-                // Create buttons for answers
-                const row = new ActionRowBuilder()
+                const newQuizRow = new ActionRowBuilder()
                     .addComponents(
                         new ButtonBuilder()
-                            .setCustomId(`quiz_A_${randomQuestion.id}`)
-                            .setLabel('A')
-                            .setStyle(ButtonStyle.Primary),
-                        new ButtonBuilder()
-                            .setCustomId(`quiz_B_${randomQuestion.id}`)
-                            .setLabel('B')
-                            .setStyle(ButtonStyle.Primary),
-                        new ButtonBuilder()
-                            .setCustomId(`quiz_C_${randomQuestion.id}`)
-                            .setLabel('C')
-                            .setStyle(ButtonStyle.Primary),
-                        new ButtonBuilder()
-                            .setCustomId(`quiz_D_${randomQuestion.id}`)
-                            .setLabel('D')
+                            .setCustomId('new_quiz')
+                            .setLabel('Start New Quiz')
                             .setStyle(ButtonStyle.Primary)
                     );
-                
-                // Calculate end time
-                const durationMs = timer.durationMinutes * 60 * 1000;
-                const endTime = new Date(Date.now() + durationMs);
-                
-                // Create quiz embed
-                const quizEmbed = new EmbedBuilder()
-                    .setColor('#3498DB')
-                    .setTitle('Quiz Time!')
-                    .setDescription(randomQuestion.question)
-                    .addFields(
-                        { name: 'A', value: randomQuestion.optionA, inline: true },
-                        { name: 'B', value: randomQuestion.optionB, inline: true },
-                        { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
-                        { name: 'C', value: randomQuestion.optionC, inline: true },
-                        { name: 'D', value: randomQuestion.optionD, inline: true },
-                        { name: 'Time Remaining', value: `Quiz ends <t:${Math.floor(endTime.getTime() / 1000)}:R>`, inline: false }
-                    )
-                    .setFooter({ text: `You have ${timer.durationMinutes} minutes to answer` })
-                    .setTimestamp();
-                
-                // Store the quiz session
-                client.quizSessions.set(userId, {
-                    questionId: randomQuestion.id,
-                    correctAnswer: randomQuestion.correctAnswer,
-                    endTime: endTime,
-                    answered: false
-                });
-                
-                // Send the quiz
-                await interaction.reply({ 
-                    content: 'Your quiz has started! Select your answer:',
-                    embeds: [quizEmbed],
-                    components: [row],
-                    ephemeral: true 
-                });
-                
-                // Set a timeout to end the quiz
-                setTimeout(async () => {
-                    const session = client.quizSessions.get(userId);
-                    
-                    if (session && !session.answered) {
-                        // User didn't answer in time
-                        client.quizSessions.delete(userId);
-                        
-                        try {
-                            // Try to edit the original message if it still exists
-                            await interaction.editReply({
-                                content: 'Time\'s up! You didn\'t answer in time.',
-                                components: []
-                            });
-                        } catch (error) {
-                            console.error('Error updating expired quiz:', error);
-                        }
-                    }
-                }, durationMs);
-                
-            } catch (error) {
-                console.error('Error starting quiz:', error);
-                await interaction.reply({ 
-                    content: 'There was an error starting the quiz!', 
-                    ephemeral: true });
+
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.update({
+                        content: isCorrect ? 'Congratulations! You got it right!' : 'Sorry, that\'s not correct.',
+                        embeds: [resultEmbed],
+                        components: [disabledRow, newQuizRow]
+                    });
+                } else {
+                    await safeReply(interaction, {
+                        content: isCorrect ? 'Congratulations! You got it right!' : 'Sorry, that\'s not correct.',
+                        embeds: [resultEmbed],
+                        components: [disabledRow, newQuizRow],
+                        ephemeral: true
+                    });
+                }
+                client.quizSessions.delete(userId);
+                return;
+            }
+
+            // Start New Quiz Button
+            if (customId === 'new_quiz') {
+                const command = client.application.commands.cache.find(cmd => cmd.name === 'startquiz');
+                if (!command) {
+                    return safeReply(interaction, {
+                        content: 'Unable to start a new quiz. Please use the /startquiz command.',
+                        ephemeral: true
+                    });
+                }
+                if (!interaction.replied && !interaction.deferred) await interaction.deferUpdate();
+
+                try {
+                    // "Fake" an interaction for startquiz
+                    const interactionCreate = client._events.interactionCreate;
+                    const mockInteraction = {
+                        ...interaction,
+                        commandName: 'startquiz',
+                        options: {
+                            getString: () => null,
+                            getInteger: () => null
+                        },
+                        isChatInputCommand: () => true,
+                        reply: interaction.followUp.bind(interaction),
+                        deferReply: interaction.deferReply.bind(interaction)
+                    };
+                    await interactionCreate[0](mockInteraction);
+                } catch (error) {
+                    console.error('Error starting new quiz:', error);
+                    await safeReply(interaction, {
+                        content: 'There was an error starting a new quiz. Please use the /startquiz command.',
+                        ephemeral: true
+                    });
+                }
+                return;
             }
         }
 
+        // ===== SLASH COMMANDS =====
+        if (interaction.isChatInputCommand()) {
+            const { commandName } = interaction;
+            try {
+                // Grouped commands (music, channel, reaction, etc)
+                if (musicCommands?.[commandName]) {
+                    await musicCommands[commandName](interaction);
+                } else if (channelCommands?.[commandName]) {
+                    await channelCommands[commandName](interaction);
+                } else if (reactionCommands?.[commandName]) {
+                    await reactionCommands[commandName](interaction);
 
-
-        else if (commandName === 'clear') {
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
-                return interaction.reply({ content: 'You need Manage Messages permission to use this command!', ephemeral: true });
-            }
-            
-            const amount = interaction.options.getInteger('amount');
-            if (amount < 1 || amount > 100) {
-                return interaction.reply({ content: 'You need to input a number between 1 and 100.', ephemeral: true });
-            }
-            
-            await interaction.channel.bulkDelete(amount, true)
-                .then(messages => {
-                    interaction.reply({ content: `Successfully deleted ${messages.size} messages.`, ephemeral: true });
-                })
-                .catch(error => {
-                    console.error(error);
-                    interaction.reply({ content: 'There was an error trying to clear messages in this channel!', ephemeral: true });
-                });
-        }
-
-
-
-        else if (commandName === 'serverinfo') {
-            const guild = interaction.guild;
-            const serverInfoEmbed = new EmbedBuilder()
-                .setColor('#5865F2')
-                .setTitle(guild.name)
-                .setThumbnail(guild.iconURL({ dynamic: true }))
-                .addFields(
-                    { name: 'Owner', value: `<@${guild.ownerId}>`, inline: true },
-                    { name: 'Created On', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`, inline: true },
-                    { name: 'Members', value: `${guild.memberCount}`, inline: true },
-                    { name: 'Channels', value: `${guild.channels.cache.size}`, inline: true },
-                    { name: 'Roles', value: `${guild.roles.cache.size}`, inline: true },
-                    { name: 'Boost Level', value: `${guild.premiumTier}`, inline: true }
-                )
-                .setFooter({ text: `Server ID: ${guild.id}` });
-            
-            await interaction.reply({ embeds: [serverInfoEmbed] });
-        }
-
-
-
-        else if (commandName === 'kick') {
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.KickMembers)) {
-                return interaction.reply({ content: 'You need Kick Members permission to use this command!', ephemeral: true });
-            }
-            
-            const targetUser = interaction.options.getUser('user');
-            const reason = interaction.options.getString('reason') || 'No reason provided';
-            
-            const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-            
-            if (!targetMember) {
-                return interaction.reply({ content: 'That user is not in this server!', ephemeral: true });
-            }
-            
-            if (!targetMember.kickable) {
-                return interaction.reply({ content: 'I cannot kick this user! They may have higher permissions than me.', ephemeral: true });
-            }
-            
-            await targetMember.kick(reason);
-            
-            const kickEmbed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('User Kicked')
-                .setDescription(`${targetUser.tag} has been kicked from the server.`)
-                .addFields(
-                    { name: 'Reason', value: reason },
-                    { name: 'Moderator', value: interaction.user.tag }
-                )
-                .setTimestamp();
-            
-            await interaction.reply({ embeds: [kickEmbed] });
-        }
-
-
-        else if (commandName === 'announcement') {
-            // Check if user has permission to manage messages
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
-                return interaction.reply({ 
-                    content: 'You need Manage Messages permission to use this command!', 
-                    ephemeral: true 
-                });
-            }
-            
-            // Get command options
-            const title = interaction.options.getString('title');
-            const description = interaction.options.getString('description');
-            const tagsInput = interaction.options.getString('tags') || '';
-            const author = interaction.options.getString('author') || interaction.user.tag;
-            const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-            
-            // Process tags
-            let mentionString = '';
-            if (tagsInput.trim()) {
-                const tagsList = tagsInput.split(',').map(tag => tag.trim());
-                
-                for (const tag of tagsList) {
-                    // Handle role mentions
-                    if (tag.startsWith('@')) {
-                        const roleName = tag.substring(1);
-                        const role = interaction.guild.roles.cache.find(r => 
-                            r.name.toLowerCase() === roleName.toLowerCase() || 
-                            r.id === roleName
+                // Standalone commands:
+                } else if (commandName === 'help') {
+                    const helpEmbed = new EmbedBuilder()
+                        .setColor('#5865F2')
+                        .setTitle('Bot Commands')
+                        .setDescription('Here are all the available commands:')
+                        .addFields(
+                            { name: '🎵 Music Commands', value: 
+                                '`/play [song]` - Play a song from YouTube\n' +
+                                '`/skip` - Skip the current song\n' +
+                                '`/stop` - Stop the music and clear the queue\n' +
+                                '`/queue` - View the current music queue'
+                            },
+                            { name: '⚙️ Channel Commands', value: 
+                                '`/createchannel` - Create a new channel\n' +
+                                '`/deletechannel` - Delete a channel\n' +
+                                '`/lockdown` - Lock the current channel\n' +
+                                '`/unlock` - Unlock the current channel'
+                            },
+                            { name: '🔄 Reaction Roles', value: 
+                                '`/reactionrole` - Create a reaction role message\n' +
+                                '`/removereactionrole` - Remove a reaction role'
+                            },
+                            { name: '📢 Announcements', value:
+                                '`/announcement` - Send a formatted announcement with optional role mentions'
+                            },
+                            { name: '🛠️ Moderation', value: 
+                                '`/kick` - Kick a user from the server\n' +
+                                '`/ban` - Ban a user from the server\n' +
+                                '`/clear` - Clear messages in a channel'
+                            },
+                            { name: '📊 Utility', value: 
+                                '`/help` - Display this help message\n' +
+                                '`/ping` - Check bot latency\n' +
+                                '`/serverinfo` - Display server information'
+                            },
+                            { name: '❓ Quiz System', value: 
+                                '`/makequiz` - Create a new quiz question (Admin only)\n' +
+                                '`/quiztimer` - Set the timer for quizzes (Admin only)\n' +
+                                '`/startquiz` - Start a quiz session'
+                            }
                         );
-                        
-                        if (role) {
-                            mentionString += `${role} `;
-                        }
-                    } else {
-                        // Just add the tag as is
-                        mentionString += `${tag} `;
+                    await interaction.reply({ embeds: [helpEmbed] });
+
+                } else if (commandName === 'ping') {
+                    const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
+                    const pingTime = sent.createdTimestamp - interaction.createdTimestamp;
+                    await interaction.editReply(`Pong! Latency is ${pingTime}ms. API Latency is ${Math.round(client.ws.ping)}ms`);
+
+                } else if (commandName === 'makequiz') {
+                    if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                        return interaction.reply({ 
+                            content: 'You need Manage Messages permission to create quizzes!', 
+                            ephemeral: true 
+                        });
+                    }
+                    const question = interaction.options.getString('question');
+                    const optionA = interaction.options.getString('optiona');
+                    const optionB = interaction.options.getString('optionb');
+                    const optionC = interaction.options.getString('optionc');
+                    const optionD = interaction.options.getString('optiond');
+                    const correctAnswer = interaction.options.getString('correct');
+                    try {
+                        await Quiz.create({
+                            question, optionA, optionB, optionC, optionD, correctAnswer,
+                            createdBy: interaction.user.id,
+                            guildId: interaction.guild.id
+                        });
+                        const quizEmbed = new EmbedBuilder()
+                            .setColor('#4CAF50')
+                            .setTitle('Quiz Question Created')
+                            .setDescription(question)
+                            .addFields(
+                                { name: 'A', value: optionA, inline: true },
+                                { name: 'B', value: optionB, inline: true },
+                                { name: '\u200B', value: '\u200B', inline: false },
+                                { name: 'C', value: optionC, inline: true },
+                                { name: 'D', value: optionD, inline: true }
+                            )
+                            .setFooter({ text: `Created by ${interaction.user.tag}` })
+                            .setTimestamp();
+                        await interaction.reply({
+                            content: 'Quiz question created successfully!',
+                            embeds: [quizEmbed],
+                            ephemeral: true
+                        });
+                    } catch (error) {
+                        console.error('Error creating quiz:', error);
+                        await interaction.reply({
+                            content: 'There was an error creating the quiz question!',
+                            ephemeral: true
+                        });
                     }
                 }
-            }
-            
-            // Create the announcement embed
-            const announcementEmbed = new EmbedBuilder()
-                .setColor('#FF9900')
-                .setTitle(`📢 ${title}`)
-                .setDescription(description)
-                .setFooter({ text: `Announcement by: ${author}` })
-                .setTimestamp();
-            
-            // Send the announcement
-            await interaction.deferReply({ ephemeral: true });
-            
-            try {
-                await targetChannel.send({ 
-                    content: mentionString.trim() ? mentionString : null,
-                    embeds: [announcementEmbed] 
-                });
-                
-                await interaction.editReply({ 
-                    content: `Announcement successfully sent to ${targetChannel}!`,
-                    ephemeral: true
-                });
+
+
+                else if (commandName === 'quiztimer') {
+                    // Check permissions
+                    if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                        return interaction.reply({ 
+                            content: 'You need Manage Messages permission to set quiz timers!', 
+                            ephemeral: true 
+                        });
+                    }
+                    
+                    const minutes = interaction.options.getInteger('minutes');
+                    const guildId = interaction.guild.id;
+                    
+                    try {
+                        // Update or create quiz timer
+                        const [timer, created] = await QuizTimer.findOrCreate({
+                            where: { guildId },
+                            defaults: {
+                                durationMinutes: minutes,
+                                isActive: false
+                            }
+                        });
+                        
+                        if (!created) {
+                            timer.durationMinutes = minutes;
+                            await timer.save();
+                        }
+                        
+                        await interaction.reply({ 
+                            content: `Quiz timer set to ${minutes} minutes!`, 
+                            ephemeral: true 
+                        });
+                    } catch (error) {
+                        console.error('Error setting quiz timer:', error);
+                        await interaction.reply({ 
+                            content: 'There was an error setting the quiz timer!', 
+                            ephemeral: true 
+                        });
+                    }
+                }
+        
+        
+                else if (commandName === 'startquiz') {
+                    const guildId = interaction.guild.id;
+                    const userId = interaction.user.id;
+                    
+                    try {
+                        // Check if there's an active quiz session
+                        const timer = await QuizTimer.findOne({ where: { guildId } });
+                        
+                        if (!timer) {
+                            return interaction.reply({ 
+                                content: 'No quiz timer has been set up for this server. Ask an admin to use /quiztimer first!', 
+                                ephemeral: true 
+                            });
+                        }
+                        
+                        // Get all quiz questions for this guild
+                        const quizQuestions = await Quiz.findAll({ where: { guildId } });
+                        
+                        if (quizQuestions.length === 0) {
+                            return interaction.reply({ 
+                                content: 'No quiz questions available. Ask an admin to add some with /makequiz!', 
+                                ephemeral: true 
+                            });
+                        }
+                        
+                        // Select a random question
+                        const randomQuestion = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
+                        
+                        // Create buttons for answers
+                        const row = new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId(`quiz_A_${randomQuestion.id}`)
+                                    .setLabel('A')
+                                    .setStyle(ButtonStyle.Primary),
+                                new ButtonBuilder()
+                                    .setCustomId(`quiz_B_${randomQuestion.id}`)
+                                    .setLabel('B')
+                                    .setStyle(ButtonStyle.Primary),
+                                new ButtonBuilder()
+                                    .setCustomId(`quiz_C_${randomQuestion.id}`)
+                                    .setLabel('C')
+                                    .setStyle(ButtonStyle.Primary),
+                                new ButtonBuilder()
+                                    .setCustomId(`quiz_D_${randomQuestion.id}`)
+                                    .setLabel('D')
+                                    .setStyle(ButtonStyle.Primary)
+                            );
+                        
+                        // Calculate end time
+                        const durationMs = timer.durationMinutes * 60 * 1000;
+                        const endTime = new Date(Date.now() + durationMs);
+                        
+                        // Create quiz embed
+                        const quizEmbed = new EmbedBuilder()
+                            .setColor('#3498DB')
+                            .setTitle('Quiz Time!')
+                            .setDescription(randomQuestion.question)
+                            .addFields(
+                                { name: 'A', value: randomQuestion.optionA, inline: true },
+                                { name: 'B', value: randomQuestion.optionB, inline: true },
+                                { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
+                                { name: 'C', value: randomQuestion.optionC, inline: true },
+                                { name: 'D', value: randomQuestion.optionD, inline: true },
+                                { name: 'Time Remaining', value: `Quiz ends <t:${Math.floor(endTime.getTime() / 1000)}:R>`, inline: false }
+                            )
+                            .setFooter({ text: `You have ${timer.durationMinutes} minutes to answer` })
+                            .setTimestamp();
+                        
+                        // Store the quiz session
+                        client.quizSessions.set(userId, {
+                            questionId: randomQuestion.id,
+                            correctAnswer: randomQuestion.correctAnswer,
+                            endTime: endTime,
+                            answered: false
+                        });
+                        
+                        // Send the quiz
+                        await interaction.reply({ 
+                            content: 'Your quiz has started! Select your answer:',
+                            embeds: [quizEmbed],
+                            components: [row],
+                            ephemeral: true 
+                        });
+                        
+                        // Set a timeout to end the quiz
+                        setTimeout(async () => {
+                            const session = client.quizSessions.get(userId);
+                            
+                            if (session && !session.answered) {
+                                // User didn't answer in time
+                                client.quizSessions.delete(userId);
+                                
+                                try {
+                                    // Try to edit the original message if it still exists
+                                    await interaction.editReply({
+                                        content: 'Time\'s up! You didn\'t answer in time.',
+                                        components: []
+                                    });
+                                } catch (error) {
+                                    console.error('Error updating expired quiz:', error);
+                                }
+                            }
+                        }, durationMs);
+                        
+                    } catch (error) {
+                        console.error('Error starting quiz:', error);
+                        await interaction.reply({ 
+                            content: 'There was an error starting the quiz!', 
+                            ephemeral: true });
+                    }
+                }
+        
+        
+        
+                else if (commandName === 'clear') {
+                    // Check permissions
+                    if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                        return safeReply({
+                            content: 'You need Manage Messages permission to use this command!',
+                            ephemeral: true
+                        });
+                    }
+                    
+                    const amount = interaction.options.getInteger('amount');
+                    
+                    try {
+                        // Defer the reply to give us time to delete messages
+                        await interaction.deferReply({ ephemeral: true });
+                        
+                        // Fetch and delete messages
+                        const messages = await interaction.channel.messages.fetch({ limit: amount });
+                        const messagesToDelete = messages.filter(msg => !msg.pinned && (Date.now() - msg.createdTimestamp) < 1209600000);
+                        
+                        if (messagesToDelete.size === 0) {
+                            return interaction.editReply({
+                                content: 'No messages found that can be deleted (messages must be less than 14 days old).',
+                                ephemeral: true
+                            });
+                        }
+                        
+                        const deletedCount = await interaction.channel.bulkDelete(messagesToDelete, true)
+                            .then(deleted => deleted.size);
+                        
+                        return interaction.editReply({
+                            content: `Successfully deleted ${deletedCount} messages.`,
+                            ephemeral: true
+                        });
+                    } catch (error) {
+                        console.error('Error clearing messages:', error);
+                        
+                        // If we've already deferred, use editReply
+                        if (interaction.deferred) {
+                            return interaction.editReply({
+                                content: `Error clearing messages: ${error.message}`,
+                                ephemeral: true
+                            });
+                        } else {
+                            // Otherwise use reply
+                            return safeReply({
+                                content: `Error clearing messages: ${error.message}`,
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+        
+        
+                else if (commandName === 'serverinfo') {
+                    const guild = interaction.guild;
+                    const serverInfoEmbed = new EmbedBuilder()
+                        .setColor('#5865F2')
+                        .setTitle(guild.name)
+                        .setThumbnail(guild.iconURL({ dynamic: true }))
+                        .addFields(
+                            { name: 'Owner', value: `<@${guild.ownerId}>`, inline: true },
+                            { name: 'Created On', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`, inline: true },
+                            { name: 'Members', value: `${guild.memberCount}`, inline: true },
+                            { name: 'Channels', value: `${guild.channels.cache.size}`, inline: true },
+                            { name: 'Roles', value: `${guild.roles.cache.size}`, inline: true },
+                            { name: 'Boost Level', value: `${guild.premiumTier}`, inline: true }
+                        )
+                        .setFooter({ text: `Server ID: ${guild.id}` });
+                    
+                    await interaction.reply({ embeds: [serverInfoEmbed] });
+                }
+        
+        
+        
+                else if (commandName === 'kick') {
+                    if (!interaction.memberPermissions.has(PermissionFlagsBits.KickMembers)) {
+                        return interaction.reply({ content: 'You need Kick Members permission to use this command!', ephemeral: true });
+                    }
+                    
+                    const targetUser = interaction.options.getUser('user');
+                    const reason = interaction.options.getString('reason') || 'No reason provided';
+                    
+                    const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+                    
+                    if (!targetMember) {
+                        return interaction.reply({ content: 'That user is not in this server!', ephemeral: true });
+                    }
+                    
+                    if (!targetMember.kickable) {
+                        return interaction.reply({ content: 'I cannot kick this user! They may have higher permissions than me.', ephemeral: true });
+                    }
+                    
+                    await targetMember.kick(reason);
+                    
+                    const kickEmbed = new EmbedBuilder()
+                        .setColor('#FF0000')
+                        .setTitle('User Kicked')
+                        .setDescription(`${targetUser.tag} has been kicked from the server.`)
+                        .addFields(
+                            { name: 'Reason', value: reason },
+                            { name: 'Moderator', value: interaction.user.tag }
+                        )
+                        .setTimestamp();
+                    
+                    await interaction.reply({ embeds: [kickEmbed] });
+                }
+        
+        
+                else if (commandName === 'announcement') {
+                    // Check if user has permission to manage messages
+                    if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                        return interaction.reply({ 
+                            content: 'You need Manage Messages permission to use this command!', 
+                            ephemeral: true 
+                        });
+                    }
+                    
+                    // Get command options
+                    const title = interaction.options.getString('title');
+                    const description = interaction.options.getString('description');
+                    const tagsInput = interaction.options.getString('tags') || '';
+                    const author = interaction.options.getString('author') || interaction.user.tag;
+                    const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+                    
+                    // Process tags
+                    let mentionString = '';
+                    if (tagsInput.trim()) {
+                        const tagsList = tagsInput.split(',').map(tag => tag.trim());
+                        
+                        for (const tag of tagsList) {
+                            // Handle role mentions
+                            if (tag.startsWith('@')) {
+                                const roleName = tag.substring(1);
+                                const role = interaction.guild.roles.cache.find(r => 
+                                    r.name.toLowerCase() === roleName.toLowerCase() || 
+                                    r.id === roleName
+                                );
+                                
+                                if (role) {
+                                    mentionString += `${role} `;
+                                }
+                            } else {
+                                // Just add the tag as is
+                                mentionString += `${tag} `;
+                            }
+                        }
+                    }
+                    
+                    // Create the announcement embed
+                    const announcementEmbed = new EmbedBuilder()
+                        .setColor('#FF9900')
+                        .setTitle(`📢 ${title}`)
+                        .setDescription(description)
+                        .setFooter({ text: `Announcement by: ${author}` })
+                        .setTimestamp();
+                    
+                    // Send the announcement
+                    await interaction.deferReply({ ephemeral: true });
+                    
+                    try {
+                        await targetChannel.send({ 
+                            content: mentionString.trim() ? mentionString : null,
+                            embeds: [announcementEmbed] 
+                        });
+                        
+                        await interaction.editReply({ 
+                            content: `Announcement successfully sent to ${targetChannel}!`,
+                            ephemeral: true
+                        });
+                    } catch (error) {
+                        console.error('Error sending announcement:', error);
+                        await interaction.editReply({ 
+                            content: `Error sending announcement: ${error.message}`,
+                            ephemeral: true
+                        });
+                    }
+                }
+        
+        
+        
+                else if (commandName === 'ban') {
+                    if (!interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)) {
+                        return interaction.reply({ content: 'You need Ban Members permission to use this command!', ephemeral: true });
+                    }
+                    
+                    const targetUser = interaction.options.getUser('user');
+                    const reason = interaction.options.getString('reason') || 'No reason provided';
+                    
+                    const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+                    
+                    if (targetMember && !targetMember.bannable) {
+                        return interaction.reply({ content: 'I cannot ban this user! They may have higher permissions than me.', ephemeral: true });
+                    }
+                    
+                    await interaction.guild.members.ban(targetUser, { reason });
+                    
+                    const banEmbed = new EmbedBuilder()
+                        .setColor('#FF0000')
+                        .setTitle('User Banned')
+                        .setDescription(`${targetUser.tag} has been banned from the server.`)
+                        .addFields(
+                            { name: 'Reason', value: reason },
+                            { name: 'Moderator', value: interaction.user.tag }
+                        )
+                        .setTimestamp();
+                    
+                    await interaction.reply({ embeds: [banEmbed] });
+                }
             } catch (error) {
-                console.error('Error sending announcement:', error);
-                await interaction.editReply({ 
-                    content: `Error sending announcement: ${error.message}`,
+                console.error(error);
+                await safeReply(interaction, {
+                    content: 'There was an error executing this command!',
                     ephemeral: true
                 });
             }
         }
-
-
-
-        else if (commandName === 'ban') {
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)) {
-                return interaction.reply({ content: 'You need Ban Members permission to use this command!', ephemeral: true });
-            }
-            
-            const targetUser = interaction.options.getUser('user');
-            const reason = interaction.options.getString('reason') || 'No reason provided';
-            
-            const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-            
-            if (targetMember && !targetMember.bannable) {
-                return interaction.reply({ content: 'I cannot ban this user! They may have higher permissions than me.', ephemeral: true });
-            }
-            
-            await interaction.guild.members.ban(targetUser, { reason });
-            
-            const banEmbed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('User Banned')
-                .setDescription(`${targetUser.tag} has been banned from the server.`)
-                .addFields(
-                    { name: 'Reason', value: reason },
-                    { name: 'Moderator', value: interaction.user.tag }
-                )
-                .setTimestamp();
-            
-            await interaction.reply({ embeds: [banEmbed] });
-        }
-    
     } catch (error) {
         console.error(error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true });
-        } else {
-            await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
-        }
-    }
-}
-    } catch (error) {
-        console.error(error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'There was an error executing this interaction!', ephemeral: true });
-        } else {
-            await interaction.reply({ content: 'There was an error executing this interaction!', ephemeral: true });
-        }
+        await safeReply(interaction, {
+            content: 'There was an error executing this interaction!',
+            ephemeral: true
+        });
     }
 });
+
+
+
+
+
+
+
 
 client.on('messageReactionRemove', async (reaction, user) => {
     // Don't respond to bot reactions
