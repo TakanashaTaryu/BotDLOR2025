@@ -747,7 +747,6 @@ const reactionCommands = {
         
         try {
             // Initialize reactionRoles collection if it doesn't exist
-            await message.react(emoji);
             if (!client.reactionRoles) {
                 client.reactionRoles = new Collection();
             }
@@ -755,6 +754,9 @@ const reactionCommands = {
             // Create a new message if messageContent is provided, otherwise use existing message
             let message;
             let messageId;
+            
+            // First, acknowledge the interaction to prevent timeout
+            await interaction.deferReply({ ephemeral: true });
             
             if (messageContent) {
                 // Create a new embed for the reaction role
@@ -780,15 +782,13 @@ const reactionCommands = {
                     try {
                         message = await channel.messages.fetch(messageId);
                     } catch (error) {
-                        return interaction.reply({
+                        return interaction.editReply({
                             content: '❌ Could not find a previous reaction role message in this channel. Please provide a message.',
-                            ephemeral: true
                         });
                     }
                 } else {
-                    return interaction.reply({
+                    return interaction.editReply({
                         content: '❌ No existing reaction role message found. Please provide a message.',
-                        ephemeral: true
                     });
                 }
             }
@@ -799,11 +799,13 @@ const reactionCommands = {
             // Check if this emoji is already used for this message
             const existingReactionRole = messageReactionRoles.find(rr => rr.emoji === emoji);
             if (existingReactionRole) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: `❌ This emoji is already used for the role <@&${existingReactionRole.roleId}> on this message`,
-                    ephemeral: true
                 });
             }
+            
+            // Add the reaction to the message
+            await message.react(emoji);
             
             // Add the new reaction role to the array
             messageReactionRoles.push({
@@ -814,7 +816,7 @@ const reactionCommands = {
             
             // Save the updated array back to the collection
             client.reactionRoles.set(messageId, messageReactionRoles);
-
+    
             await ReactionRole.create({
                 messageId: messageId,
                 channelId: channel.id,
@@ -822,11 +824,8 @@ const reactionCommands = {
                 emoji: emoji,
                 roleId: role.id
             });
-
+    
             console.log(`Added reaction role: ${messageId} -> ${role.id} with emoji ${emoji}`);
-            
-            // Add the reaction to the message
-            await message.react(emoji);
             
             // Update the message embed to show all roles if it's our message
             if (message.author.id === client.user.id && message.embeds.length > 0) {
@@ -855,17 +854,15 @@ const reactionCommands = {
                 await message.edit({ embeds: [embed] });
             }
             
-            // Confirm to the user
-            return interaction.reply({
+            // Confirm to the user using editReply instead of reply
+            return interaction.editReply({
                 content: `✅ Successfully added reaction role!\nChannel: ${channel}\nMessage ID: ${messageId}\nRole: ${role}\nEmoji: ${emoji}`,
-                ephemeral: true
             });
             
         } catch (error) {
             console.error('Error setting up reaction role:', error);
-            return interaction.reply({
+            return interaction.editReply({
                 content: `❌ An error occurred: ${error.message}`,
-                ephemeral: true
             });
         }
     },
@@ -878,10 +875,10 @@ const reactionCommands = {
                 ephemeral: true
             });
         }
-
+    
         const messageId = interaction.options.getString('messageid');
         const emoji = interaction.options.getString('emoji');
-
+    
         // Check if we have reaction roles for this message
         const messageReactionRoles = client.reactionRoles.get(messageId);
         if (!messageReactionRoles) {
@@ -890,7 +887,7 @@ const reactionCommands = {
                 ephemeral: true
             });
         }
-
+    
         // Find the index of the reaction role with this emoji
         const index = messageReactionRoles.findIndex(rr => rr.emoji === emoji);
         if (index === -1) {
@@ -899,7 +896,10 @@ const reactionCommands = {
                 ephemeral: true
             });
         }
-
+    
+        // Acknowledge the interaction first
+        await interaction.deferReply({ ephemeral: true });
+    
         // Get the channel ID to find the message
         const channelId = messageReactionRoles[index].channelId;
         try {
@@ -914,9 +914,8 @@ const reactionCommands = {
             
             // Remove the reaction role from the array
             messageReactionRoles.splice(index, 1);
-
-            //remove from database
-
+    
+            // Remove from database
             await ReactionRole.destroy({
                 where: {
                     messageId: messageId,
@@ -927,7 +926,7 @@ const reactionCommands = {
             // If there are still reaction roles for this message, update the collection
             if (messageReactionRoles.length > 0) {
                 client.reactionRoles.set(messageId, messageReactionRoles);
-
+    
                 // Update the message embed if it's our message
                 if (message.author.id === client.user.id && message.embeds.length > 0) {
                     const embed = EmbedBuilder.from(message.embeds[0]);
@@ -960,15 +959,14 @@ const reactionCommands = {
                 client.reactionRoles.delete(messageId);
             }
             
-            interaction.reply({
+            // Use editReply instead of reply
+            interaction.editReply({
                 content: '✅ Reaction role removed successfully!',
-                ephemeral: true
             });
         } catch (error) {
             console.error('Error removing reaction role:', error);
-            interaction.reply({
+            interaction.editReply({
                 content: `❌ Error removing reaction role: ${error.message}`,
-                ephemeral: true
             });
         }
     },
@@ -1017,6 +1015,9 @@ const reactionCommands = {
             return interaction.reply({ content: 'No valid emoji-role pairs provided!', ephemeral: true });
         }
         
+        // Acknowledge the interaction first
+        await interaction.deferReply({ ephemeral: true });
+        
         // Create the embed description with the role list
         let embedDescription = description + '\n\n**Available Roles:**\n';
         
@@ -1031,8 +1032,6 @@ const reactionCommands = {
             .setTitle(title)
             .setDescription(embedDescription)
             .setFooter({ text: 'React untuk mengklaim Role, hapus React untuk menghapus Role!' });
-        
-        await interaction.reply({ content: 'Creating reaction role message...', ephemeral: true });
         
         const message = await channel.send({ embeds: [embed] });
         
@@ -1074,9 +1073,9 @@ const reactionCommands = {
         // Store all reaction roles for this message
         client.reactionRoles.set(message.id, messageReactionRoles);
         
+        // Use editReply instead of reply
         await interaction.editReply({ 
-            content: `Reaction role message created in ${channel}!`, 
-            ephemeral: true 
+            content: `Reaction role message created in ${channel}!`
         });
     }
 };
