@@ -1532,6 +1532,8 @@ client.quizResults = new Collection();
 client.on('interactionCreate', async (interaction) => {
     console.log(`Received interaction: ${interaction.type} from ${interaction.user.tag}`);
 
+    
+    try {
     if (interaction.isButton()) {
         const customId = interaction.customId;
 
@@ -1799,6 +1801,8 @@ client.on('interactionCreate', async (interaction) => {
                 });
             }
         }
+
+
         else if (commandName === 'quiztimer') {
             // Check permissions
             if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
@@ -1838,6 +1842,8 @@ client.on('interactionCreate', async (interaction) => {
                 });
             }
         }
+
+
         else if (commandName === 'startquiz') {
             const guildId = interaction.guild.id;
             const userId = interaction.user.id;
@@ -1952,6 +1958,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
 
+
         else if (commandName === 'clear') {
             if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
                 return interaction.reply({ content: 'You need Manage Messages permission to use this command!', ephemeral: true });
@@ -1971,6 +1978,9 @@ client.on('interactionCreate', async (interaction) => {
                     interaction.reply({ content: 'There was an error trying to clear messages in this channel!', ephemeral: true });
                 });
         }
+
+
+
         else if (commandName === 'serverinfo') {
             const guild = interaction.guild;
             const serverInfoEmbed = new EmbedBuilder()
@@ -1989,6 +1999,9 @@ client.on('interactionCreate', async (interaction) => {
             
             await interaction.reply({ embeds: [serverInfoEmbed] });
         }
+
+
+
         else if (commandName === 'kick') {
             if (!interaction.memberPermissions.has(PermissionFlagsBits.KickMembers)) {
                 return interaction.reply({ content: 'You need Kick Members permission to use this command!', ephemeral: true });
@@ -2021,6 +2034,7 @@ client.on('interactionCreate', async (interaction) => {
             
             await interaction.reply({ embeds: [kickEmbed] });
         }
+
 
         else if (commandName === 'announcement') {
             // Check if user has permission to manage messages
@@ -2092,6 +2106,8 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
 
+
+
         else if (commandName === 'ban') {
             if (!interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)) {
                 return interaction.reply({ content: 'You need Ban Members permission to use this command!', ephemeral: true });
@@ -2120,13 +2136,22 @@ client.on('interactionCreate', async (interaction) => {
             
             await interaction.reply({ embeds: [banEmbed] });
         }
+    
     } catch (error) {
         console.error(error);
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true });
-            } else {
-                await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
-            }
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
+        }
+    }
+}
+    } catch (error) {
+        console.error(error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error executing this interaction!', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'There was an error executing this interaction!', ephemeral: true });
         }
     }
 });
