@@ -661,39 +661,37 @@ client.on('messageReactionAdd', async (reaction, user) => {
     // Get emoji details for better debugging
     const emojiName = reaction.emoji.name;
     const emojiId = reaction.emoji.id;
-    const emojiIdentifier = emojiId ? `${emojiName}:${emojiId}` : emojiName;
     
     console.log(`User ${user.tag} reacted with: ${emojiName} (ID: ${emojiId || 'standard emoji'})`);
-    console.log(`Emoji identifier: ${emojiIdentifier}`);
+    console.log(`Available reaction roles for this message:`, messageReactionRoles);
     
-    // Normalize the emoji for comparison
-    let normalizedEmoji;
-    if (emojiId) {
-        // For custom emoji, try multiple formats
-        normalizedEmoji = [
-            `<:${emojiName}:${emojiId}>`,  // Full format
-            `${emojiName}:${emojiId}`,     // Without brackets
-            emojiId,                       // Just the ID
-            emojiName                      // Just the name
-        ];
-    } else {
-        // For standard emoji
-        normalizedEmoji = [emojiName];
-    }
-    
-    console.log(`Normalized emoji formats: ${JSON.stringify(normalizedEmoji)}`);
-    
-    // Find the matching reaction role with improved emoji matching
+    // Try different emoji formats for matching
     let matchingRole = null;
     
     for (const rr of messageReactionRoles) {
-        console.log(`Checking against stored emoji: ${rr.emoji}`);
+        console.log(`Comparing with stored emoji: ${rr.emoji}`);
         
-        // Check if any of our normalized formats match
-        if (normalizedEmoji.some(format => format === rr.emoji)) {
-            console.log(`✅ Match found! Role ID: ${rr.roleId}`);
+        // For standard emoji (no ID)
+        if (!emojiId && rr.emoji === emojiName) {
+            console.log(`✅ Match found with standard emoji: ${emojiName}`);
             matchingRole = rr;
             break;
+        }
+        
+        // For custom emoji, try different formats
+        if (emojiId) {
+            const possibleFormats = [
+                `<:${emojiName}:${emojiId}>`,  // Full format
+                `${emojiName}:${emojiId}`,     // Without brackets
+                emojiId.toString(),            // Just the ID as string
+                emojiName                      // Just the name
+            ];
+            
+            if (possibleFormats.includes(rr.emoji) || rr.emoji.includes(emojiId)) {
+                console.log(`✅ Match found with custom emoji format: ${rr.emoji}`);
+                matchingRole = rr;
+                break;
+            }
         }
     }
     
@@ -711,8 +709,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
             console.error('Error adding role:', error);
         }
     } else {
-        console.log(`No matching role found for emoji: ${emojiIdentifier}`);
-        console.log(`Available roles for this message: ${JSON.stringify(messageReactionRoles)}`);
+        console.log(`No matching role found for emoji: ${emojiName}`);
     }
 });
 
@@ -1170,6 +1167,9 @@ async function loadReactionRolesFromDatabase() {
         
         console.log(`Found ${reactionRoles.length} reaction roles in database.`);
         
+        // Clear existing collection to avoid duplicates on restart
+        client.reactionRoles = new Collection();
+        
         // Group reaction roles by messageId
         for (const rr of reactionRoles) {
             const messageId = rr.messageId;
@@ -1180,8 +1180,8 @@ async function loadReactionRolesFromDatabase() {
                 console.log(`Created new entry for message ID: ${messageId}`);
             }
             
-            // Normalize emoji format if needed
-            let emoji = rr.emoji;
+            // Store the emoji exactly as it is in the database
+            const emoji = rr.emoji;
             
             // Add this reaction role to the array
             client.reactionRoles.get(messageId).push({
@@ -1193,13 +1193,45 @@ async function loadReactionRolesFromDatabase() {
             console.log(`Loaded reaction role from database: Message ID: ${messageId}, Role ID: ${rr.roleId}, Emoji: ${emoji}, Channel ID: ${rr.channelId}`);
         }
         
-        console.log(`Loaded ${reactionRoles.length} reaction roles from database.`);
-        
         // Log the entire reaction roles collection for debugging
         console.log('Current reaction roles collection:');
         for (const [messageId, roles] of client.reactionRoles.entries()) {
-            console.log(`Message ID: ${messageId}, Roles: ${JSON.stringify(roles)}`);
+            console.log(`Message ID: ${messageId}, Roles:`, roles);
         }
+        
+        // Verify the messages still exist and fetch them
+        for (const [messageId, roles] of client.reactionRoles.entries()) {
+            if (roles.length > 0) {
+                const channelId = roles[0].channelId;
+                try {
+                    const channel = await client.channels.fetch(channelId);
+                    if (channel) {
+                        try {
+                            await channel.messages.fetch(messageId);
+                            console.log(`Successfully verified message ${messageId} exists in channel ${channelId}`);
+                        } catch (error) {
+                            console.error(`Message ${messageId} no longer exists in channel ${channelId}, removing from collection`);
+                            client.reactionRoles.delete(messageId);
+                            
+                            // Remove from database
+                            await ReactionRole.destroy({
+                                where: { messageId: messageId }
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Channel ${channelId} no longer exists, removing message ${messageId} from collection`);
+                    client.reactionRoles.delete(messageId);
+                    
+                    // Remove from database
+                    await ReactionRole.destroy({
+                        where: { messageId: messageId }
+                    });
+                }
+            }
+        }
+        
+        console.log(`Successfully loaded and verified ${client.reactionRoles.size} reaction role messages`);
     } catch (error) {
         console.error('Error loading reaction roles from database:', error);
     }
