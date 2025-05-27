@@ -1530,13 +1530,7 @@ client.quizResults = new Collection();
 
 
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    if (!interaction.isButton()) return;
-
     console.log(`Received interaction: ${interaction.type} from ${interaction.user.tag}`);
-    
-    const { commandName } = interaction;
-    const customId = interaction.customId;
 
     if (interaction.isButton()) {
         const customId = interaction.customId;
@@ -1547,7 +1541,6 @@ client.on('interactionCreate', async (interaction) => {
         
         // Get the user's quiz session
         const session = client.quizSessions.get(userId);
-        
         if (!session) {
             return interaction.reply({
                 content: 'This quiz session is no longer active.',
@@ -1636,7 +1629,6 @@ client.on('interactionCreate', async (interaction) => {
         // Clean up the session
         client.quizSessions.delete(userId);
     }
-}
     
     // Handle "Start New Quiz" button
     if (interaction.customId === 'new_quiz') {
@@ -1682,7 +1674,11 @@ client.on('interactionCreate', async (interaction) => {
                 ephemeral: true
             });
         }
+        return;
     }
+}
+
+
     if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
     
@@ -1951,8 +1947,7 @@ client.on('interactionCreate', async (interaction) => {
                 console.error('Error starting quiz:', error);
                 await interaction.reply({ 
                     content: 'There was an error starting the quiz!', 
-                    ephemeral: true 
-                });
+                    ephemeral: true });
             }
         }
 
@@ -2127,13 +2122,13 @@ client.on('interactionCreate', async (interaction) => {
         }
     } catch (error) {
         console.error(error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true });
-        } else {
-            await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: 'There was an error executing this command!', ephemeral: true });
+            } else {
+                await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
+            }
         }
     }
-}
 });
 
 client.on('messageReactionRemove', async (reaction, user) => {
