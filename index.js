@@ -34,6 +34,36 @@ const client = new Client({
     partials: ['MESSAGE', 'CHANNEL', 'REACTION'] // Add this line for handling uncached reactions
 });
 
+client.on('ready', async () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+    
+    try {
+        // Register slash commands
+        const { REST } = require('@discordjs/rest');
+        const { Routes } = require('discord-api-types/v9');
+        
+        const rest = new REST({ version: '9' }).setToken(process.env.DISCORD_TOKEN);
+        
+        console.log('Started refreshing application (/) commands.');
+        
+        // Get all your commands from the commands array
+        const commandsData = commands.map(command => command.toJSON());
+        
+        // Register commands globally
+        await rest.put(
+            Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
+            { body: commandsData },
+        );
+        
+        console.log('Successfully reloaded application (/) commands.');
+        
+        // Sync database
+        await syncDatabase();
+    } catch (error) {
+        console.error('Error during initialization:', error);
+    }
+});
+
 client.musicQueues = new Map();
 
 // Collections for commands and music queues
@@ -1503,8 +1533,13 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     if (!interaction.isButton()) return;
 
+    console.log(`Received interaction: ${interaction.type} from ${interaction.user.tag}`);
+    
     const { commandName } = interaction;
     const customId = interaction.customId;
+
+    if (interaction.isButton()) {
+        const customId = interaction.customId;
 
     if (customId.startsWith('quiz_')) {
         const [prefix, answer, questionId] = customId.split('_');
@@ -1601,6 +1636,7 @@ client.on('interactionCreate', async (interaction) => {
         // Clean up the session
         client.quizSessions.delete(userId);
     }
+}
     
     // Handle "Start New Quiz" button
     if (interaction.customId === 'new_quiz') {
@@ -1647,7 +1683,9 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
     }
-
+    if (interaction.isChatInputCommand()) {
+        const { commandName } = interaction;
+    
     try {
         // Handle existing command categories
         if (musicCommands[commandName]) {
@@ -2095,6 +2133,7 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
         }
     }
+}
 });
 
 client.on('messageReactionRemove', async (reaction, user) => {
