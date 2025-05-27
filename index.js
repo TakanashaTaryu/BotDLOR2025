@@ -652,15 +652,25 @@ client.on('messageReactionAdd', async (reaction, user) => {
     
     // Check if we have reaction roles for this message
     const messageReactionRoles = client.reactionRoles?.get(reaction.message.id);
-    if (!messageReactionRoles) return;
+    if (!messageReactionRoles) {
+        console.log(`No reaction roles found for message ID: ${reaction.message.id}`);
+        return;
+    }
     
-    // Find the matching reaction role
+    console.log(`Found reaction roles for message ID: ${reaction.message.id}`);
+    console.log(`User reacted with: ${reaction.emoji.name} (ID: ${reaction.emoji.id || 'standard emoji'})`);
+    
+    // Find the matching reaction role with improved emoji matching
     const matchingRole = messageReactionRoles.find(rr => {
-        // Handle both standard and custom emojis
+        // Log the comparison for debugging
+        console.log(`Comparing reaction: ${reaction.emoji.name} (${reaction.emoji.id || 'standard'}) with stored emoji: ${rr.emoji}`);
+        
+        // Handle different emoji formats
         if (reaction.emoji.id) {
-            // Custom emoji
+            // Custom emoji - try different formats
             return rr.emoji === `<:${reaction.emoji.name}:${reaction.emoji.id}>` || 
-                   rr.emoji === reaction.emoji.id;
+                   rr.emoji === reaction.emoji.id ||
+                   rr.emoji === `${reaction.emoji.name}:${reaction.emoji.id}`;
         } else {
             // Standard emoji
             return rr.emoji === reaction.emoji.name;
@@ -668,6 +678,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     });
     
     if (matchingRole) {
+        console.log(`Found matching role: ${matchingRole.roleId} for emoji: ${matchingRole.emoji}`);
         try {
             // Get the guild member
             const guild = reaction.message.guild;
@@ -679,6 +690,8 @@ client.on('messageReactionAdd', async (reaction, user) => {
         } catch (error) {
             console.error('Error adding role:', error);
         }
+    } else {
+        console.log(`No matching role found for emoji: ${reaction.emoji.name}`);
     }
 });
 
@@ -1120,9 +1133,13 @@ client.once('ready', async () => {
     }
 });
 
+// ... existing code ...
+
 async function loadReactionRolesFromDatabase() {
     try {
         const reactionRoles = await ReactionRole.findAll();
+        
+        console.log(`Found ${reactionRoles.length} reaction roles in database.`);
         
         // Group reaction roles by messageId
         for (const rr of reactionRoles) {
@@ -1131,6 +1148,7 @@ async function loadReactionRolesFromDatabase() {
             // If this message doesn't exist in the collection yet, create a new array
             if (!client.reactionRoles.has(messageId)) {
                 client.reactionRoles.set(messageId, []);
+                console.log(`Created new entry for message ID: ${messageId}`);
             }
             
             // Add this reaction role to the array
@@ -1140,17 +1158,22 @@ async function loadReactionRolesFromDatabase() {
                 channelId: rr.channelId
             });
             
-            console.log(`Loaded reaction role from database: ${messageId} -> ${rr.roleId} with emoji ${rr.emoji}`);
+            console.log(`Loaded reaction role from database: Message ID: ${messageId}, Role ID: ${rr.roleId}, Emoji: ${rr.emoji}, Channel ID: ${rr.channelId}`);
         }
         
         console.log(`Loaded ${reactionRoles.length} reaction roles from database.`);
+        
+        // Log the entire reaction roles collection for debugging
+        console.log('Current reaction roles collection:');
+        for (const [messageId, roles] of client.reactionRoles.entries()) {
+            console.log(`Message ID: ${messageId}, Roles: ${JSON.stringify(roles)}`);
+        }
     } catch (error) {
         console.error('Error loading reaction roles from database:', error);
     }
 }
 
-
-// ... existing code ...
+// ... existing code ....
 
 // Update your commands array
 const commands = [
@@ -1494,10 +1517,19 @@ client.on('messageReactionRemove', async (reaction, user) => {
     const messageReactionRoles = client.reactionRoles?.get(reaction.message.id);
     if (!messageReactionRoles) return;
     
-    // Find the matching reaction role
-    const matchingRole = messageReactionRoles.find(rr => 
-        rr.emoji === reaction.emoji.name || rr.emoji === `<:${reaction.emoji.name}:${reaction.emoji.id}>`
-    );
+    // Find the matching reaction role with improved emoji matching
+    const matchingRole = messageReactionRoles.find(rr => {
+        // Handle different emoji formats
+        if (reaction.emoji.id) {
+            // Custom emoji - try different formats
+            return rr.emoji === `<:${reaction.emoji.name}:${reaction.emoji.id}>` || 
+                   rr.emoji === reaction.emoji.id ||
+                   rr.emoji === `${reaction.emoji.name}:${reaction.emoji.id}`;
+        } else {
+            // Standard emoji
+            return rr.emoji === reaction.emoji.name;
+        }
+    });
     
     if (matchingRole) {
         try {
