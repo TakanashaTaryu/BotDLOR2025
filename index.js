@@ -1554,34 +1554,6 @@ client.on('interactionCreate', async (interaction) => {
             
             await interaction.reply({ embeds: [kickEmbed] });
         }
-        else if (commandName === 'ban') {
-            if (!interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)) {
-                return interaction.reply({ content: 'You need Ban Members permission to use this command!', ephemeral: true });
-            }
-            
-            const targetUser = interaction.options.getUser('user');
-            const reason = interaction.options.getString('reason') || 'No reason provided';
-            
-            const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-            
-            if (targetMember && !targetMember.bannable) {
-                return interaction.reply({ content: 'I cannot ban this user! They may have higher permissions than me.', ephemeral: true });
-            }
-            
-            await interaction.guild.members.ban(targetUser, { reason });
-            
-            const banEmbed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('User Banned')
-                .setDescription(`${targetUser.tag} has been banned from the server.`)
-                .addFields(
-                    { name: 'Reason', value: reason },
-                    { name: 'Moderator', value: interaction.user.tag }
-                )
-                .setTimestamp();
-            
-            await interaction.reply({ embeds: [banEmbed] });
-        }
 
         else if (commandName === 'announcement') {
             // Check if user has permission to manage messages
@@ -1651,6 +1623,35 @@ client.on('interactionCreate', async (interaction) => {
                     ephemeral: true
                 });
             }
+        }
+
+        else if (commandName === 'ban') {
+            if (!interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)) {
+                return interaction.reply({ content: 'You need Ban Members permission to use this command!', ephemeral: true });
+            }
+            
+            const targetUser = interaction.options.getUser('user');
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+            
+            const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+            
+            if (targetMember && !targetMember.bannable) {
+                return interaction.reply({ content: 'I cannot ban this user! They may have higher permissions than me.', ephemeral: true });
+            }
+            
+            await interaction.guild.members.ban(targetUser, { reason });
+            
+            const banEmbed = new EmbedBuilder()
+                .setColor('#FF0000')
+                .setTitle('User Banned')
+                .setDescription(`${targetUser.tag} has been banned from the server.`)
+                .addFields(
+                    { name: 'Reason', value: reason },
+                    { name: 'Moderator', value: interaction.user.tag }
+                )
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [banEmbed] });
         }
     } catch (error) {
         console.error(error);
