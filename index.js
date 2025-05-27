@@ -16,6 +16,9 @@ const ytSearch = require('yt-search');
 const sequelize = require('./config/database');
 const ReactionRole = require('./models/ReactionRole');
 
+const Quiz = require('./models/Quiz');
+const QuizTimer = require('./models/QuizTimer');
+
 
 
 // Initialize Discord client
@@ -1237,10 +1240,76 @@ async function loadReactionRolesFromDatabase() {
     }
 }
 
+async function syncDatabase() {
+    try {
+        // Sync all models
+        await sequelize.sync({ alter: true });
+        console.log('Database synchronized');
+        
+        // Load reaction roles
+        await loadReactionRolesFromDatabase();
+    } catch (error) {
+        console.error('Error syncing database:', error);
+    }
+}
+
 // ... existing code ....
 
 // Update your commands array
 const commands = [
+
+    
+    // Quiz commands
+    new SlashCommandBuilder()
+        .setName('makequiz')
+        .setDescription('Create a new quiz question')
+        .addStringOption(option =>
+            option.setName('question')
+                .setDescription('The quiz question')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('optiona')
+                .setDescription('Option A')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('optionb')
+                .setDescription('Option B')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('optionc')
+                .setDescription('Option C')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('optiond')
+                .setDescription('Option D')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('correct')
+                .setDescription('Correct answer (A, B, C, or D)')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'A', value: 'A' },
+                    { name: 'B', value: 'B' },
+                    { name: 'C', value: 'C' },
+                    { name: 'D', value: 'D' }
+                )),
+    
+    new SlashCommandBuilder()
+        .setName('quiztimer')
+        .setDescription('Set the timer for quizzes')
+        .addIntegerOption(option =>
+            option.setName('minutes')
+                .setDescription('Duration in minutes (5, 10, 30)')
+                .setRequired(true)
+                .addChoices(
+                    { name: '5 minutes', value: 5 },
+                    { name: '10 minutes', value: 10 },
+                    { name: '30 minutes', value: 30 }
+                )),
+    
+    new SlashCommandBuilder()
+        .setName('startquiz')
+        .setDescription('Start a quiz session'),
 
     new SlashCommandBuilder()
     .setName('announcement')
@@ -1426,11 +1495,158 @@ new SlashCommandBuilder()
                 .setDescription('Reason for banning'))
 ];
 
+client.quizSessions = new Collection();
+client.quizResults = new Collection();
+
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isButton()) return;
 
     const { commandName } = interaction;
+    const customId = interaction.customId;
+
+    if (customId.startsWith('quiz_')) {
+        const [prefix, answer, questionId] = customId.split('_');
+        const userId = interaction.user.id;
+        
+        // Get the user's quiz session
+        const session = client.quizSessions.get(userId);
+        
+        if (!session) {
+            return interaction.reply({
+                content: 'This quiz session is no longer active.',
+                ephemeral: true
+            });
+        }
+        
+        // Check if the quiz has expired
+        if (Date.now() > session.endTime) {
+            client.quizSessions.delete(userId);
+            return interaction.reply({
+                content: 'This quiz has expired.',
+                ephemeral: true
+            });
+        }
+        
+        // Mark as answered
+        session.answered = true;
+        
+        // Check if the answer is correct
+        const isCorrect = answer === session.correctAnswer;
+        
+        // Update quiz results
+        if (!client.quizResults.has(userId)) {
+            client.quizResults.set(userId, { correct: 0, total: 0 });
+        }
+        
+        const userResults = client.quizResults.get(userId);
+        userResults.total++;
+        
+        if (isCorrect) {
+            userResults.correct++;
+        }
+        
+        // Create result embed
+        const resultEmbed = new EmbedBuilder()
+            .setColor(isCorrect ? '#4CAF50' : '#F44336')
+            .setTitle(isCorrect ? '✅ Correct Answer!' : '❌ Wrong Answer!')
+            .setDescription(`The correct answer was: ${session.correctAnswer}`)
+            .addFields(
+                { name: 'Your Score', value: `${userResults.correct}/${userResults.total} (${Math.round(userResults.correct / userResults.total * 100)}%)`, inline: false }
+            )
+            .setTimestamp();
+        
+        // Disable all buttons
+        const disabledRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`quiz_A_disabled`)
+                    .setLabel('A')
+                    .setStyle(session.correctAnswer === 'A' ? ButtonStyle.Success : (answer === 'A' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
+                    .setDisabled(true),
+                new ButtonBuilder()
+                    .setCustomId(`quiz_B_disabled`)
+                    .setLabel('B')
+                    .setStyle(session.correctAnswer === 'B' ? ButtonStyle.Success : (answer === 'B' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
+                    .setDisabled(true),
+                new ButtonBuilder()
+                    .setCustomId(`quiz_C_disabled`)
+                    .setLabel('C')
+                    .setStyle(session.correctAnswer === 'C' ? ButtonStyle.Success : (answer === 'C' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
+                    .setDisabled(true),
+                new ButtonBuilder()
+                    .setCustomId(`quiz_D_disabled`)
+                    .setLabel('D')
+                    .setStyle(session.correctAnswer === 'D' ? ButtonStyle.Success : (answer === 'D' && !isCorrect ? ButtonStyle.Danger : ButtonStyle.Secondary))
+                    .setDisabled(true)
+            );
+        
+        // Add a button to start a new quiz
+        const newQuizRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`new_quiz`)
+                    .setLabel('Start New Quiz')
+                    .setStyle(ButtonStyle.Primary)
+            );
+        
+        // Update the message
+        await interaction.update({
+            content: isCorrect ? 'Congratulations! You got it right!' : 'Sorry, that\'s not correct.',
+            embeds: [resultEmbed],
+            components: [disabledRow, newQuizRow]
+        });
+        
+        // Clean up the session
+        client.quizSessions.delete(userId);
+    }
+    
+    // Handle "Start New Quiz" button
+    if (interaction.customId === 'new_quiz') {
+        // Create a new interaction to trigger the startquiz command
+        const command = client.application.commands.cache.find(cmd => cmd.name === 'startquiz');
+        
+        if (!command) {
+            return interaction.reply({
+                content: 'Unable to start a new quiz. Please use the /startquiz command.',
+                ephemeral: true
+            });
+        }
+        
+        // Acknowledge the button click
+        await interaction.deferUpdate();
+        
+        // Create a new slash command
+        const { commandName } = interaction;
+        try {
+            // Manually trigger the startquiz command
+            const startQuizCommand = 'startquiz';
+            const interactionCreate = client._events.interactionCreate;
+            
+            // Create a mock interaction
+            const mockInteraction = {
+                ...interaction,
+                commandName: startQuizCommand,
+                options: {
+                    getString: () => null,
+                    getInteger: () => null
+                },
+                isChatInputCommand: () => true,
+                reply: interaction.followUp.bind(interaction),
+                deferReply: interaction.deferReply.bind(interaction)
+            };
+            
+            // Call the handler
+            await interactionCreate[0](mockInteraction);
+        } catch (error) {
+            console.error('Error starting new quiz:', error);
+            await interaction.followUp({
+                content: 'There was an error starting a new quiz. Please use the /startquiz command.',
+                ephemeral: true
+            });
+        }
+    }
 
     try {
         // Handle existing command categories
@@ -1476,15 +1692,233 @@ client.on('interactionCreate', async (interaction) => {
                         '`/help` - Display this help message\n' +
                         '`/ping` - Check bot latency\n' +
                         '`/serverinfo` - Display server information'
+                    },
+                    { name: '❓ Quiz System', value: 
+                        '`/makequiz` - Create a new quiz question (Admin only)\n' +
+                        '`/quiztimer` - Set the timer for quizzes (Admin only)\n' +
+                        '`/startquiz` - Start a quiz session'
                     }
                 );
             
             await interaction.reply({ embeds: [helpEmbed] });
-        }else if (commandName === 'ping') {
+        }
+        
+        else if (commandName === 'ping') {
             const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
             const pingTime = sent.createdTimestamp - interaction.createdTimestamp;
             await interaction.editReply(`Pong! Latency is ${pingTime}ms. API Latency is ${Math.round(client.ws.ping)}ms`);
         }
+
+        else if (commandName === 'makequiz') {
+            // Check permissions
+            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                return interaction.reply({ 
+                    content: 'You need Manage Messages permission to create quizzes!', 
+                    ephemeral: true 
+                });
+            }
+            
+            const question = interaction.options.getString('question');
+            const optionA = interaction.options.getString('optiona');
+            const optionB = interaction.options.getString('optionb');
+            const optionC = interaction.options.getString('optionc');
+            const optionD = interaction.options.getString('optiond');
+            const correctAnswer = interaction.options.getString('correct');
+            
+            try {
+                // Create quiz in database
+                await Quiz.create({
+                    question,
+                    optionA,
+                    optionB,
+                    optionC,
+                    optionD,
+                    correctAnswer,
+                    createdBy: interaction.user.id,
+                    guildId: interaction.guild.id
+                });
+                
+                const quizEmbed = new EmbedBuilder()
+                    .setColor('#4CAF50')
+                    .setTitle('Quiz Question Created')
+                    .setDescription(question)
+                    .addFields(
+                        { name: 'A', value: optionA, inline: true },
+                        { name: 'B', value: optionB, inline: true },
+                        { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
+                        { name: 'C', value: optionC, inline: true },
+                        { name: 'D', value: optionD, inline: true }
+                    )
+                    .setFooter({ text: `Created by ${interaction.user.tag}` })
+                    .setTimestamp();
+                
+                await interaction.reply({ 
+                    content: 'Quiz question created successfully!', 
+                    embeds: [quizEmbed],
+                    ephemeral: true 
+                });
+            } catch (error) {
+                console.error('Error creating quiz:', error);
+                await interaction.reply({ 
+                    content: 'There was an error creating the quiz question!', 
+                    ephemeral: true 
+                });
+            }
+        }
+        else if (commandName === 'quiztimer') {
+            // Check permissions
+            if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
+                return interaction.reply({ 
+                    content: 'You need Manage Messages permission to set quiz timers!', 
+                    ephemeral: true 
+                });
+            }
+            
+            const minutes = interaction.options.getInteger('minutes');
+            const guildId = interaction.guild.id;
+            
+            try {
+                // Update or create quiz timer
+                const [timer, created] = await QuizTimer.findOrCreate({
+                    where: { guildId },
+                    defaults: {
+                        durationMinutes: minutes,
+                        isActive: false
+                    }
+                });
+                
+                if (!created) {
+                    timer.durationMinutes = minutes;
+                    await timer.save();
+                }
+                
+                await interaction.reply({ 
+                    content: `Quiz timer set to ${minutes} minutes!`, 
+                    ephemeral: true 
+                });
+            } catch (error) {
+                console.error('Error setting quiz timer:', error);
+                await interaction.reply({ 
+                    content: 'There was an error setting the quiz timer!', 
+                    ephemeral: true 
+                });
+            }
+        }
+        else if (commandName === 'startquiz') {
+            const guildId = interaction.guild.id;
+            const userId = interaction.user.id;
+            
+            try {
+                // Check if there's an active quiz session
+                const timer = await QuizTimer.findOne({ where: { guildId } });
+                
+                if (!timer) {
+                    return interaction.reply({ 
+                        content: 'No quiz timer has been set up for this server. Ask an admin to use /quiztimer first!', 
+                        ephemeral: true 
+                    });
+                }
+                
+                // Get all quiz questions for this guild
+                const quizQuestions = await Quiz.findAll({ where: { guildId } });
+                
+                if (quizQuestions.length === 0) {
+                    return interaction.reply({ 
+                        content: 'No quiz questions available. Ask an admin to add some with /makequiz!', 
+                        ephemeral: true 
+                    });
+                }
+                
+                // Select a random question
+                const randomQuestion = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
+                
+                // Create buttons for answers
+                const row = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`quiz_A_${randomQuestion.id}`)
+                            .setLabel('A')
+                            .setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder()
+                            .setCustomId(`quiz_B_${randomQuestion.id}`)
+                            .setLabel('B')
+                            .setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder()
+                            .setCustomId(`quiz_C_${randomQuestion.id}`)
+                            .setLabel('C')
+                            .setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder()
+                            .setCustomId(`quiz_D_${randomQuestion.id}`)
+                            .setLabel('D')
+                            .setStyle(ButtonStyle.Primary)
+                    );
+                
+                // Calculate end time
+                const durationMs = timer.durationMinutes * 60 * 1000;
+                const endTime = new Date(Date.now() + durationMs);
+                
+                // Create quiz embed
+                const quizEmbed = new EmbedBuilder()
+                    .setColor('#3498DB')
+                    .setTitle('Quiz Time!')
+                    .setDescription(randomQuestion.question)
+                    .addFields(
+                        { name: 'A', value: randomQuestion.optionA, inline: true },
+                        { name: 'B', value: randomQuestion.optionB, inline: true },
+                        { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
+                        { name: 'C', value: randomQuestion.optionC, inline: true },
+                        { name: 'D', value: randomQuestion.optionD, inline: true },
+                        { name: 'Time Remaining', value: `Quiz ends <t:${Math.floor(endTime.getTime() / 1000)}:R>`, inline: false }
+                    )
+                    .setFooter({ text: `You have ${timer.durationMinutes} minutes to answer` })
+                    .setTimestamp();
+                
+                // Store the quiz session
+                client.quizSessions.set(userId, {
+                    questionId: randomQuestion.id,
+                    correctAnswer: randomQuestion.correctAnswer,
+                    endTime: endTime,
+                    answered: false
+                });
+                
+                // Send the quiz
+                await interaction.reply({ 
+                    content: 'Your quiz has started! Select your answer:',
+                    embeds: [quizEmbed],
+                    components: [row],
+                    ephemeral: true 
+                });
+                
+                // Set a timeout to end the quiz
+                setTimeout(async () => {
+                    const session = client.quizSessions.get(userId);
+                    
+                    if (session && !session.answered) {
+                        // User didn't answer in time
+                        client.quizSessions.delete(userId);
+                        
+                        try {
+                            // Try to edit the original message if it still exists
+                            await interaction.editReply({
+                                content: 'Time\'s up! You didn\'t answer in time.',
+                                components: []
+                            });
+                        } catch (error) {
+                            console.error('Error updating expired quiz:', error);
+                        }
+                    }
+                }, durationMs);
+                
+            } catch (error) {
+                console.error('Error starting quiz:', error);
+                await interaction.reply({ 
+                    content: 'There was an error starting the quiz!', 
+                    ephemeral: true 
+                });
+            }
+        }
+
+
         else if (commandName === 'clear') {
             if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
                 return interaction.reply({ content: 'You need Manage Messages permission to use this command!', ephemeral: true });
