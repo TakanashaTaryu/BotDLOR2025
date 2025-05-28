@@ -1648,38 +1648,8 @@ client.on('interactionCreate', async (interaction) => {
 
             // Start New Quiz Button
             if (customId === 'new_quiz') {
-                const command = client.application.commands.cache.find(cmd => cmd.name === 'startquiz');
-                if (!command) {
-                    return safeReply(interaction, {
-                        content: 'Unable to start a new quiz. Please use the /startquiz command.',
-                        ephemeral: true
-                    });
-                }
-                if (!interaction.replied && !interaction.deferred) await interaction.deferUpdate();
+                return await startQuizSession(interaction);
 
-                try {
-                    // "Fake" an interaction for startquiz
-                    const interactionCreate = client._events.interactionCreate;
-                    const mockInteraction = {
-                        ...interaction,
-                        commandName: 'startquiz',
-                        options: {
-                            getString: () => null,
-                            getInteger: () => null
-                        },
-                        isChatInputCommand: () => true,
-                        reply: interaction.followUp.bind(interaction),
-                        deferReply: interaction.deferReply.bind(interaction)
-                    };
-                    await interactionCreate[0](mockInteraction);
-                } catch (error) {
-                    console.error('Error starting new quiz:', error);
-                    await safeReply(interaction, {
-                        content: 'There was an error starting a new quiz. Please use the /startquiz command.',
-                        ephemeral: true
-                    });
-                }
-                return;
             }
         }
 
@@ -1833,120 +1803,13 @@ client.on('interactionCreate', async (interaction) => {
         
         
                 else if (commandName === 'startquiz') {
-                    const guildId = interaction.guild.id;
-                    const userId = interaction.user.id;
-                    
-                    try {
-                        // Check if there's an active quiz session
-                        const timer = await QuizTimer.findOne({ where: { guildId } });
-                        
-                        if (!timer) {
-                            return interaction.reply({ 
-                                content: 'No quiz timer has been set up for this server. Ask an admin to use /quiztimer first!', 
-                                ephemeral: true 
-                            });
-                        }
-                        
-                        // Get all quiz questions for this guild
-                        const quizQuestions = await Quiz.findAll({ where: { guildId } });
-                        
-                        if (quizQuestions.length === 0) {
-                            return interaction.reply({ 
-                                content: 'No quiz questions available. Ask an admin to add some with /makequiz!', 
-                                ephemeral: true 
-                            });
-                        }
-                        
-                        // Select a random question
-                        const randomQuestion = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
-                        
-                        // Create buttons for answers
-                        const row = new ActionRowBuilder()
-                            .addComponents(
-                                new ButtonBuilder()
-                                    .setCustomId(`quiz_A_${randomQuestion.id}`)
-                                    .setLabel('A')
-                                    .setStyle(ButtonStyle.Primary),
-                                new ButtonBuilder()
-                                    .setCustomId(`quiz_B_${randomQuestion.id}`)
-                                    .setLabel('B')
-                                    .setStyle(ButtonStyle.Primary),
-                                new ButtonBuilder()
-                                    .setCustomId(`quiz_C_${randomQuestion.id}`)
-                                    .setLabel('C')
-                                    .setStyle(ButtonStyle.Primary),
-                                new ButtonBuilder()
-                                    .setCustomId(`quiz_D_${randomQuestion.id}`)
-                                    .setLabel('D')
-                                    .setStyle(ButtonStyle.Primary)
-                            );
-                        
-                        // Calculate end time
-                        const durationMs = timer.durationMinutes * 60 * 1000;
-                        const endTime = new Date(Date.now() + durationMs);
-                        
-                        // Create quiz embed
-                        const quizEmbed = new EmbedBuilder()
-                            .setColor('#3498DB')
-                            .setTitle('Quiz Time!')
-                            .setDescription(randomQuestion.question)
-                            .addFields(
-                                { name: 'A', value: randomQuestion.optionA, inline: true },
-                                { name: 'B', value: randomQuestion.optionB, inline: true },
-                                { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
-                                { name: 'C', value: randomQuestion.optionC, inline: true },
-                                { name: 'D', value: randomQuestion.optionD, inline: true },
-                                { name: 'Time Remaining', value: `Quiz ends <t:${Math.floor(endTime.getTime() / 1000)}:R>`, inline: false }
-                            )
-                            .setFooter({ text: `You have ${timer.durationMinutes} minutes to answer` })
-                            .setTimestamp();
-                        
-                        // Store the quiz session
-                        client.quizSessions.set(userId, {
-                            questionId: randomQuestion.id,
-                            correctAnswer: randomQuestion.correctAnswer,
-                            endTime: endTime,
-                            answered: false
-                        });
-                        
-                        // Send the quiz
-                        await interaction.reply({ 
-                            content: 'Your quiz has started! Select your answer:',
-                            embeds: [quizEmbed],
-                            components: [row],
-                            ephemeral: true 
-                        });
-                        
-                        // Set a timeout to end the quiz
-                        setTimeout(async () => {
-                            const session = client.quizSessions.get(userId);
-                            
-                            if (session && !session.answered) {
-                                // User didn't answer in time
-                                client.quizSessions.delete(userId);
-                                
-                                try {
-                                    // Try to edit the original message if it still exists
-                                    await interaction.editReply({
-                                        content: 'Time\'s up! You didn\'t answer in time.',
-                                        components: []
-                                    });
-                                } catch (error) {
-                                    console.error('Error updating expired quiz:', error);
-                                }
-                            }
-                        }, durationMs);
-                        
-                    } catch (error) {
-                        console.error('Error starting quiz:', error);
-                        await interaction.reply({ 
-                            content: 'There was an error starting the quiz!', 
-                            ephemeral: true });
-                    }
+                    await startQuizSession(interaction);
                 }
         
         
         
+
+
                 else if (commandName === 'clear') {
                     // Check permissions
                     if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) {
@@ -2854,7 +2717,10 @@ Common Issues:
 4. Use proper permission checks for admin commands
 5. Validate user input on web dashboard
 */
-
+client.removeAllListeners('guildMemberAdd');
+client.removeAllListeners('channelCreate');
+client.removeAllListeners('channelDelete');
+client.removeAllListeners('guildMemberRemove');
 // Start the bot and web server
 
 

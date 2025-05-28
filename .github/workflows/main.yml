@@ -11,8 +11,8 @@ jobs:
     - name: 📂 Deploy Build Files
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
       with:
-        server: ${{ secrets.FTP_SERVE }}
-        username: ${{ secrets.FTP_USERNAM }}
-        password: ${{ secrets.FTP_PASSWOR }}
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
 
   
