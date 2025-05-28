@@ -1052,6 +1052,7 @@ const reactionCommands = {
         const pairsString = interaction.options.getString('pairs');
         const color = interaction.options.getString('color') || '#0099ff';
         
+        
         if (channel.type !== 0) {
             return interaction.reply({ content: 'Please select a text channel!', ephemeral: true });
         }
@@ -1359,6 +1360,10 @@ const commands = [
     .addStringOption(option =>
         option.setName('author')
             .setDescription('Who is making this announcement')
+            .setRequired(false))
+    .addStringOption(option =>
+        option.setName('image')
+            .setDescription('URL of the image to attach to the announcement')
             .setRequired(false))
     .addChannelOption(option =>
         option.setName('channel')
@@ -1929,10 +1934,13 @@ client.on('interactionCreate', async (interaction) => {
                     
                     // Get command options
                     const title = interaction.options.getString('title');
-                    const description = interaction.options.getString('description');
                     const tagsInput = interaction.options.getString('tags') || '';
                     const author = interaction.options.getString('author') || interaction.user.tag;
+                    const imageUrl = interaction.options.getString('image');
                     const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+                    let description = interaction.options.getString('description') || '';
+                    description = description.replace(/\\n/g, '\n');
+                    
                     
                     // Process tags
                     let mentionString = '';
@@ -1965,6 +1973,11 @@ client.on('interactionCreate', async (interaction) => {
                         .setDescription(description)
                         .setFooter({ text: `Announcement by: ${author}` })
                         .setTimestamp();
+                    
+                    // Add image if URL is provided
+                    if (imageUrl) {
+                        announcementEmbed.setImage(imageUrl);
+                    }
                     
                     // Send the announcement
                     await interaction.deferReply({ ephemeral: true });
